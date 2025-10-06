@@ -1,0 +1,21 @@
+{
+  "name": "syplugin-vectorIndexClient",
+  "author": "OpaqueGlass",
+  "url": "https://github.com/OpaqueGlass/syplugin-vectorIndexClient",
+  "version": "0.1.0",
+  "minAppVersion": "2.9.0",
+  "backends": ["all"],
+  "frontends": ["all"],
+  "displayName": {
+    "en_US": "Vector Search Client",
+    "zh_CN": "向量搜索（客户端）"
+  },
+  "description": {
+    "en_US": "Work with ",
+    "zh_CN": "使用Chroma等向量数据库，完成笔记内容的向量化与检索。"
+  },
+  "readme": {
+    "en_US": "README.md",
+    "zh_CN": "README_zh_CN.md"
+  }
+}
