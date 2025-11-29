@@ -1,4 +1,3 @@
-import { TabProperty, ConfigProperty, loadAllConfigPropertyFromTabProperty } from "../utils/settings";
 import { createApp, ref, watch } from "vue";
 import { getPluginInstance } from "@/utils/pluginHelper";
 import { debugPush, logPush, warnPush } from "@/logger";
@@ -6,10 +5,12 @@ import { isMobile } from "@/syapi";
 import { isValidStr } from "@/utils/commonCheck";
 import * as siyuan from "siyuan";
 import outdatedSettingVue from "@/components/dialog/outdatedSetting.vue";
-import { generateUUID } from "@/utils/common";
+import { generateUUID, showPluginMessage } from "@/utils/common";
 import { lang } from "@/utils/lang";
 import { setStyle } from "./setStyle";
 import { CONSTANTS } from "@/constants";
+import { getTabProperties } from "./settingPageManager";
+import { loadAllConfigPropertyFromTabProperty } from "@/utils/settings";
 
 // const pluginInstance = getPluginInstance();
 
@@ -20,37 +21,15 @@ interface IPluginSettings {
 let defaultSetting: IPluginSettings = {
     baseURL: "http://localhost:16809",
     apiKey: "",
+    autoUpdate: false,
+    ignoreDocListStr: "",
+    ignoreDocList: [],
 }
 
 
-let tabProperties: Array<TabProperty> = [
-    
-];
+
 let updateTimeout: any = null;
 
-/**
- * 设置项初始化
- * 应该在语言文件载入完成后调用执行
- */
-export function initSettingProperty() {
-    tabProperties.push(
-        new TabProperty({
-            key: "general", iconKey: "iconSettings", props: [
-                new ConfigProperty({ key: "baseURL", type: "TEXT" }),
-                new ConfigProperty({ key: "apiKey", type: "TEXT" }),
-            ]
-        }),
-        new TabProperty({
-            key: "about", iconKey: "iconTheme", props: [
-                new ConfigProperty({ key: "aboutTip", type: "TIPS" }),
-            ]
-        }),
-    );
-}
-
-export function getTabProperties() {
-    return tabProperties;
-}
 
 // 发生变动之后，由界面调用这里
 export function saveSettings(newSettings: any) {
@@ -116,9 +95,17 @@ export async function loadSettings() {
             // logPush("保存设置项", newVal);
             setStyle();
             changeDebug(newVal);
+            updateIgnoreDocList(newVal);
             updateTimeout = null;
         }, 1000);
     }, {deep: true, immediate: false});
+}
+
+function updateIgnoreDocList(newVal) {
+    if (isValidStr(newVal["ignoreDocListStr"])) {
+        let docList = newVal["ignoreDocListStr"].split("\n").map((item: string)=>item.trim()).filter((item: string)=>item!="");
+        setting.value["ignoreDocList"] = docList;
+    }
 }
 
 function checkOutdatedSettings(loadSetting) {
@@ -169,7 +156,7 @@ function changeDebug(newVal) {
 }
 
 function checkSettingType(input:any) {
-    const propertyMap = loadAllConfigPropertyFromTabProperty(tabProperties)
+    const propertyMap = loadAllConfigPropertyFromTabProperty(getTabProperties());
     // 这里可以检查
     return input;
 }

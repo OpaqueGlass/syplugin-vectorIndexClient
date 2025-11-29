@@ -12,7 +12,7 @@
     "hello": {
         "makesure": "使用这个模板之前，请阅读<a href=\"https://github.com/siyuan-note/plugin-sample\">官方教程</a>, 确保自己已经理解了插件的基本开发流程。"
     },
-    "setting_panel_title": "Vue&Vite插件模板",
+    "setting_panel_title": "向量搜索客户端 设置页",
     "setting_enableIt_name": "启用插件",
     "setting_fontSize_desp": "单位px",
     "setting_fontSize_name": "字号",

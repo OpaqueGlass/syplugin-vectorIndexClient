@@ -27,10 +27,18 @@ async function getDocDBitem(id:string) {
     return queryResponse[0];
 }
 
-async function getSubDocIds(id:string): Promise<string[]> {
+async function getSubDocIds(id:string, isNotebook: boolean = false): Promise<string[]> {
 	// 添加idx?
-	const docInfo = await getDocDBitem(id);
-	const treeList = await listDocTree(docInfo["box"], docInfo["path"].replace(".sy", ""));
+	let treeList = [];
+	if (isNotebook) {
+		treeList = await listDocTree(id, "/");
+	} else {
+		const docInfo = await getDocDBitem(id);
+		if (docInfo == null) {
+			return [];
+		}
+		treeList = await listDocTree(docInfo["box"], docInfo["path"].replace(".sy", ""));
+	}
 	const subIdsSet = new Set();
 	function addToSet(obj) {
 		if (obj instanceof Array) {
@@ -53,6 +61,14 @@ async function getSubDocIds(id:string): Promise<string[]> {
 	console.log("subIdsSet", subIdsSet, treeList);
 	return Array.from(subIdsSet) as string[];
 }
+/**
+ * 休息一下，等待
+ * @param time 单位毫秒
+ * @returns 
+ */
+function sleep(time:number){
+    return new Promise((resolve) => setTimeout(resolve, time));
+}
 
 
 
@@ -72,29 +88,58 @@ async function init() {
 // 写一个循环，按照一定的间隔，定时获取队列内容，进行处理
 let intervalFlag = null;
 let working = false;
+let g_settings = {};
 init().catch((err) => {
 	console.error("Initialization error:", err);
 });
 
+function checkPermission(dbItem, ignoreList: string[]): boolean {
+	const notebookId = dbItem.box;
+	const path = dbItem.path;
+	if (ignoreList && ignoreList.includes(notebookId)) {
+		return false;
+	}
+	if (ignoreList) {
+		for (const docId of ignoreList) {
+			if (notebookId === docId || path.includes(docId) || dbItem.id === docId) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 async function processDocument(docId: string) {
 	if (!isValidStr(docId)) {
-		return;
+		return true;
 	}
 	// 检查id
 	const dbItem = await getBlockDBItem(docId);
 	if (dbItem == null) {
 		indexProvider.delete(docId, "document");
 		indexProvider.delete(docId, "block");
-		return;
+		return true;
+	}
+	// 权限检查，部分的块我们没有索引权限
+	if (!checkPermission(dbItem, g_settings["ignoreDocList"] ?? [])) {
+		indexProvider.delete(docId, "document");
+		indexProvider.delete(docId, "block");
+		return true;
 	}
 	// 获取文档内容
 	const content = await exportMdContent({id: docId, refMode: 4, embedMode: 1, yfm: false});
 	// 发送出去
-	if (dbItem["type"] === "d") {
-		await indexProvider.update(docId, null, content["content"], {}, "document");
-	} else if (dbItem["type"] === "p") {
-		await indexProvider.update(dbItem["root"], docId, content["content"], {}, "block");
+	try {
+		if (dbItem["type"] === "d") {
+			await indexProvider.update(docId, null, content["content"], {}, "document");
+		} else if (dbItem["type"] === "p") {
+			await indexProvider.update(dbItem["root"], docId, content["content"], {}, "block");
+		}
+	} catch (error) {
+		console.error("Index update error:", error);
+		return false;
 	}
+	return true;
 }
 
 self.onmessage = async function (e) {
@@ -128,7 +173,8 @@ self.onmessage = async function (e) {
 			await cacheQueue.addToQueue(docId);
 			self.postMessage({ type: "added", docId });
 		} else if (type === "start") {
-			let { backendBaseURL, apiKey } = payload;
+			let { backendBaseURL, apiKey, settings } = payload;
+			g_settings = settings;
 			// 创建文件夹
 			await init();
 			indexProvider = new MyIndexProvider(backendBaseURL, apiKey);
@@ -145,7 +191,12 @@ self.onmessage = async function (e) {
 					while (cacheQueue.hasNext()) {
 						let docId = await cacheQueue.consumeOne();
 						// 处理文档
-						await processDocument(docId);
+						let result = await processDocument(docId);
+						if (result === false) {
+							// 处理失败，重新加入队列尾部
+							await cacheQueue.addToQueue(docId);
+							await sleep(10000);
+						}
 					}
 				} catch (err) {
 					console.error("Worker interval error:", err);
@@ -154,12 +205,25 @@ self.onmessage = async function (e) {
 				working = false;
 			}, 10000);
 			self.postMessage({ type: "started" });
-		} else if (type === "end") {
+		} else if (type === "stop") {
 			if (intervalFlag) {
 				clearInterval(intervalFlag);
 				intervalFlag = null;
 			}
-			self.postMessage({ type: "ended" });
+			const {returnType} = payload;
+			if (returnType === "restart") {
+				self.postMessage({ type: "stopped-for-restart" });
+			} else {
+				self.postMessage({ type: "stopped" });
+			}
+		} else if (type === "indexAll"){
+			// 索引所有文档
+			let { notebookList } = payload;
+			for (let notebookId of notebookList) {
+				let allDocIds: string[] = await getSubDocIds(notebookId, true);
+				await cacheQueue.batchAddToQueue(allDocIds);
+			}
+			self.postMessage({ type: "indexAllAdded", notebookCount: notebookList.length }); 
 		} else {
 			self.postMessage({ type: "error", error: "Unknown message type" });
 		}

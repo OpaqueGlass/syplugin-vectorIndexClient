@@ -185,4 +185,17 @@ export class CacheQueue<T> {
             }
         });
     }
+
+    /**
+     * 停止 CacheQueue 的运行。
+     * 清理定时器并确保队列的状态被持久化。
+     */
+    public async stop(): Promise<void> {
+        // 清理定时器
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = null;
+        }
+        await this.persist();
+    }
 }

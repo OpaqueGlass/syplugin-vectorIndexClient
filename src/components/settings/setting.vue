@@ -82,8 +82,8 @@ import Input from './items/input.vue';
 import Select from './items/select.vue';
 import Textarea from './items/textarea.vue';
 // import Order from './items/order.vue'; // 由于sortablejs默认对document绑定事件，在不需要使用该功能的插件上可能影响性能，本模板自v0.1.0其默认禁用；要使用此依赖，需要重新引入sortablejs，一并取消上面ORDER类型的注释；
-import { getGSettings, getTabProperties } from '@/manager/settingManager';
-
+import { getGSettings } from '@/manager/settingManager';
+import { getTabProperties } from '@/manager/settingPageManager';
 // const props = defineProps<{
 //     tabs: Array<ITabProperty>
 // }>();

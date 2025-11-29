@@ -10,14 +10,14 @@ import { createApp } from "vue";
 import settingVue from "./components/settings/setting.vue";
 import { setLanguage } from "./utils/lang";
 import { debugPush, errorPush, logPush } from "./logger";
-import { initSettingProperty } from './manager/settingManager';
+import { initSettingProperty } from './manager/settingPageManager';
 import { setPluginInstance } from "./utils/pluginHelper";
 import { loadSettings } from "./manager/settingManager";
 import EventHandler from "./manager/eventHandler";
 import { removeStyle, setStyle } from "./manager/setStyle";
 import { bindCommand } from "./manager/shortcutHandler";
 import { generateUUID } from "./utils/common";
-import { checkAndStart, useWorker } from "./utils/indexerHelper";
+import { checkAndStart, startOnce, useWorker } from "./utils/indexerHelper";
 
 const STORAGE_NAME = "menu-config";
 
@@ -43,7 +43,7 @@ export default class OGSamplePlugin extends Plugin {
         loadSettings().then(()=>{
             this.myEventHandler.bindHandler();
             setStyle();
-            checkAndStart().catch((e)=>{
+            startOnce().catch((e)=>{
                 errorPush("无法连接至后端服务", e);
                 showMessage("无法连接至后端服务，RAG Indexer start faild. " + this.name);
             });

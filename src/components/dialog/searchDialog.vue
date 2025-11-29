@@ -31,6 +31,9 @@
             <!-- Lightrag result (single preview) -->
             <div v-if="!isLoading && searchResults.length > 0 && ragType === 'lightrag'" 
                  style="padding: 15px; line-height: 1.6; white-space: pre-wrap; height: 100%; overflow-y: auto; display: flex; flex-direction: column; justify-content: space-between;">
+                 <div style="text-align: right; margin-top: 10px;">
+                    <button @click="onCopyItem(searchResults[0])" class="b3-button">{{ lang('copy_item') }}</button>
+                </div>
                 <p>{{ searchResults[0].content }}</p>
                 <div style="text-align: right; margin-top: 10px;">
                     <button @click="onCopyItem(searchResults[0])" class="b3-button">{{ lang('copy_item') }}</button>
