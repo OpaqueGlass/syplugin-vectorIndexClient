@@ -89,6 +89,7 @@ async function init() {
 let intervalFlag = null;
 let working = false;
 let g_settings = {};
+let ignoreList = [];
 init().catch((err) => {
 	console.error("Initialization error:", err);
 });
@@ -96,6 +97,7 @@ init().catch((err) => {
 function checkPermission(dbItem, ignoreList: string[]): boolean {
 	const notebookId = dbItem.box;
 	const path = dbItem.path;
+	console.log("Checking permission for", notebookId, path, ignoreList);
 	if (ignoreList && ignoreList.includes(notebookId)) {
 		return false;
 	}
@@ -121,9 +123,10 @@ async function processDocument(docId: string) {
 		return true;
 	}
 	// 权限检查，部分的块我们没有索引权限
-	if (!checkPermission(dbItem, g_settings["ignoreDocList"] ?? [])) {
+	if (!checkPermission(dbItem, ignoreList || [])) {
 		indexProvider.delete(docId, "document");
 		indexProvider.delete(docId, "block");
+		console.log("Permission denied for document:", docId);
 		return true;
 	}
 	// 获取文档内容
@@ -131,9 +134,23 @@ async function processDocument(docId: string) {
 	// 发送出去
 	try {
 		if (dbItem["type"] === "d") {
+			if (content["content"] == null || content["content"].length <= 5) {
+				console.log("Document content is empty or too short, skipping:", docId);
+				return true;
+			}
 			await indexProvider.update(docId, null, content["content"], {}, "document");
+			// 获取该块下的所有有效块
+			const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE root_id = '${docId}' and type in ('p', 't', 'i')`) ?? [];
+			if (queryResponse != null) {
+				for (const block of queryResponse) {
+					if (block["markdown"] == null || block["markdown"].length <= 5) {
+						continue;
+					}
+					await indexProvider.update(block["root_id"], block["id"], block["markdown"], {}, "block");
+				}
+			}
 		} else if (dbItem["type"] === "p") {
-			await indexProvider.update(dbItem["root"], docId, content["content"], {}, "block");
+			await indexProvider.update(dbItem["root_id"], docId, content["content"], {}, "block");
 		}
 	} catch (error) {
 		console.error("Index update error:", error);
@@ -175,6 +192,7 @@ self.onmessage = async function (e) {
 		} else if (type === "start") {
 			let { backendBaseURL, apiKey, settings } = payload;
 			g_settings = settings;
+			ignoreList = settings["ignoreDocListStr"].split("\n").map((item: string)=>item.trim()).filter((item: string)=>item!="");
 			// 创建文件夹
 			await init();
 			indexProvider = new MyIndexProvider(backendBaseURL, apiKey);
@@ -190,6 +208,7 @@ self.onmessage = async function (e) {
 					console.log("Worker interval triggered", cacheQueue.hasNext());
 					while (cacheQueue.hasNext()) {
 						let docId = await cacheQueue.consumeOne();
+						console.log("Processing document:", docId);
 						// 处理文档
 						let result = await processDocument(docId);
 						if (result === false) {
@@ -197,6 +216,7 @@ self.onmessage = async function (e) {
 							await cacheQueue.addToQueue(docId);
 							await sleep(10000);
 						}
+						console.log("Document processed:", docId, result);
 					}
 				} catch (err) {
 					console.error("Worker interval error:", err);

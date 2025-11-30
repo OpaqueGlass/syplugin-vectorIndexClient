@@ -4,7 +4,7 @@ import { IndexConsumer } from "@/indexer/indexConsumer";
 import { MyIndexProvider } from "@/indexer/myProvider";
 import BackWorker from '@/indexer/worker?worker&url';
 import { logPush } from "@/logger";
-import { getGSettings, getReadOnlyGSettings } from "@/manager/settingManager";
+import { getGSettings, getReadOnlyGSettings, registerSettingUpdateCallback } from "@/manager/settingManager";
 import { watch } from "vue";
 
 let provider: IndexProvider;
@@ -31,26 +31,28 @@ export async function startOnce() {
         return;
     }
     startOnceFlag = true;
-    watch(getGSettings(), (newVal, oldVal) => {
-        logPush("GSettings changed:", newVal, oldVal);
-        restartWorker();
-    }, { deep: true, immediate: false });
+    registerSettingUpdateCallback(async (newSettings) => {
+        logPush("设置项变动，通知Worker重启");
+        await restartWorker();
+    });
 }
 export async function checkAndStart() {
     const g_setting = getReadOnlyGSettings();
     provider = new MyIndexProvider(g_setting["baseURL"], g_setting["apiKey"]);
     const result = await provider.health();
+    worker.postMessage({type: "start", payload: {"backendBaseURL": g_setting["baseURL"], "apiKey": g_setting["apiKey"], "settings": g_setting}});
+    worker.onmessage = function(e) {
+        const { type, ...rest } = e.data;
+        logPush("Worker message:", type, rest);
+        if (type === "stopped-for-restart") {
+            checkAndStart();
+        }
+    }
+    logPush("RAG Indexer后台worker已启动");
     if (result) {
         logPush("RAG Indexer确认可连接");
-        worker.postMessage({type: "start", payload: {"backendBaseURL": g_setting["baseURL"], "apiKey": g_setting["apiKey"], "settings": g_setting}});
-        worker.onmessage = function(e) {
-            const { type, ...rest } = e.data;
-            logPush("Worker message:", type, rest);
-            if (type === "stopped-for-restart") {
-                checkAndStart();
-            }
-        }
-        logPush("RAG Indexer后台worker已启动");
+    } else {
+        logPush("RAG Indexer启动时检查连接失败，请检查设置项及后台服务状态");
     }
 }
 

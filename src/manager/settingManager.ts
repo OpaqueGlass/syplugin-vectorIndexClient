@@ -22,14 +22,14 @@ let defaultSetting: IPluginSettings = {
     baseURL: "http://localhost:16809",
     apiKey: "",
     autoUpdate: false,
-    ignoreDocListStr: "",
-    ignoreDocList: [],
+    ignoreDocListStr: "20210808180117-czj9bvb\n",
 }
 
 
 
 let updateTimeout: any = null;
 
+let updateCallbackList = [];
 
 // 发生变动之后，由界面调用这里
 export function saveSettings(newSettings: any) {
@@ -38,6 +38,15 @@ export function saveSettings(newSettings: any) {
     getPluginInstance().saveData("settings_main.json", JSON.stringify(newSettings, null, 4));
 }
 
+export function registerSettingUpdateCallback(callback: (newSettings:any)=>void) {
+    updateCallbackList.push(callback);
+}
+export function unregisterSettingUpdateCallback(callback: (newSettings:any)=>void) {
+    const index = updateCallbackList.indexOf(callback);
+    if (index !== -1) {
+        updateCallbackList.splice(index, 1);
+    }
+}
 
 /**
  * 仅用于初始化时载入设置项
@@ -95,7 +104,13 @@ export async function loadSettings() {
             // logPush("保存设置项", newVal);
             setStyle();
             changeDebug(newVal);
-            updateIgnoreDocList(newVal);
+            for (let callback of updateCallbackList) {
+                try {
+                    callback(newVal);
+                } catch(err) {
+                    warnPush("设置项更新回调发生错误", err);
+                }
+            }
             updateTimeout = null;
         }, 1000);
     }, {deep: true, immediate: false});
@@ -105,6 +120,8 @@ function updateIgnoreDocList(newVal) {
     if (isValidStr(newVal["ignoreDocListStr"])) {
         let docList = newVal["ignoreDocListStr"].split("\n").map((item: string)=>item.trim()).filter((item: string)=>item!="");
         setting.value["ignoreDocList"] = docList;
+    } else {
+        setting.value["ignoreDocList"] = [];
     }
 }
 

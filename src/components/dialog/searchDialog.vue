@@ -13,6 +13,10 @@
                 <option value="lightrag">lightrag</option>
                 <option value="chroma">chroma</option>
             </select>
+            <select v-model="searchType" v-if="ragType != 'lightrag'" class="b3-select">
+                <option value="document">document</option>
+                <option value="block">block</option>
+            </select>
             <button @click="performSearch" class="b3-button b3-button--primary">{{ lang('search') }}</button>
         </div>
 
@@ -82,6 +86,7 @@ const searchResults = ref<QueryResult[]>([]);
 const isLoading = ref(false);
 const hasSearched = ref(false);
 const searchInput = ref<HTMLInputElement | null>(null);
+const searchType = ref("document");
 
 // 搜索函数
 const performSearch = async () => {
@@ -100,7 +105,11 @@ const performSearch = async () => {
 
     try {
         const provider = useProvider();
-        const data = await provider.query(searchQuery.value, "document", 30, ragType.value);
+        let serachTypeStr = searchType.value;
+        if (ragType.value == "lightrag") {
+            serachTypeStr = "document";
+        }
+        const data = await provider.query(searchQuery.value, serachTypeStr, 30, ragType.value);
         searchResults.value = data as QueryResult[];
     } catch (error) {
         console.error('Search failed:', error);
