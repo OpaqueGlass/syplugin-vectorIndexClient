@@ -10,6 +10,9 @@ import { CacheQueue } from ".";
 import { IndexProvider } from "./baseIndexProvider";
 import { MyIndexProvider } from "./myProvider";
 import { isValidStr } from "@/utils/commonCheck";
+import { errorPush, logPush } from "@/logger";
+import { VectorServiceManager } from "@/manager/indexServiceManager";
+import { IVectorStoreService } from "@/services";
 
 async function getBlockDBItem(id:string) {
 	const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE id = '${id}'`);
@@ -58,7 +61,7 @@ async function getSubDocIds(id:string, isNotebook: boolean = false): Promise<str
 		}
 	}
 	addToSet(treeList);
-	console.log("subIdsSet", subIdsSet, treeList);
+	logPush("subIdsSet", subIdsSet, treeList);
 	return Array.from(subIdsSet) as string[];
 }
 /**
@@ -70,34 +73,40 @@ function sleep(time:number){
     return new Promise((resolve) => setTimeout(resolve, time));
 }
 
-
-
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 const cacheQueue: CacheQueue<string> = new CacheQueue<string>(SAVE_FOLDER + "/cache");
 let indexProvider: IndexProvider | null = null;
+const vectorManager = new VectorServiceManager();
+
+// 状态控制变量
+let intervalFlag: any = null;
+let working = false;
+let idleCycles = 0; // 记录空闲循环次数
+const MAX_IDLE_CYCLES = 3; 
+const INTERVAL_MS = 10000;
+
+let g_settings = {};
+let ignoreList = [];
+let g_backendConfig = { baseURL: "", apiKey: "" };
+
 async function init() {
 	try {
 		await createFolder(SAVE_FOLDER);
 		await createFolder(SAVE_FOLDER + "/cache");
 	} catch (err) {
-		console.error("Failed to create folders:", err);
+		errorPush("Failed to create folders:", err);
 	}
 	await cacheQueue.init();
 }
 
-// 写一个循环，按照一定的间隔，定时获取队列内容，进行处理
-let intervalFlag = null;
-let working = false;
-let g_settings = {};
-let ignoreList = [];
 init().catch((err) => {
-	console.error("Initialization error:", err);
+	errorPush("Initialization error:", err);
 });
 
 function checkPermission(dbItem, ignoreList: string[]): boolean {
 	const notebookId = dbItem.box;
 	const path = dbItem.path;
-	console.log("Checking permission for", notebookId, path, ignoreList);
+	logPush("Checking permission for", notebookId, path, ignoreList);
 	if (ignoreList && ignoreList.includes(notebookId)) {
 		return false;
 	}
@@ -112,144 +121,175 @@ function checkPermission(dbItem, ignoreList: string[]): boolean {
 }
 
 async function processDocument(docId: string) {
-	if (!isValidStr(docId)) {
-		return true;
-	}
-	// 检查id
-	const dbItem = await getBlockDBItem(docId);
-	if (dbItem == null) {
-		indexProvider.delete(docId, "document");
-		indexProvider.delete(docId, "block");
-		return true;
-	}
-	// 权限检查，部分的块我们没有索引权限
-	if (!checkPermission(dbItem, ignoreList || [])) {
-		indexProvider.delete(docId, "document");
-		indexProvider.delete(docId, "block");
-		console.log("Permission denied for document:", docId);
-		return true;
-	}
-	// 获取文档内容
-	const content = await exportMdContent({id: docId, refMode: 4, embedMode: 1, yfm: false});
-	// 发送出去
-	try {
-		if (dbItem["type"] === "d") {
-			if (content["content"] == null || content["content"].length <= 5) {
-				console.log("Document content is empty or too short, skipping:", docId);
-				return true;
-			}
-			await indexProvider.update(docId, null, content["content"], {}, "document");
-			// 获取该块下的所有有效块
-			const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE root_id = '${docId}' and type in ('p', 't', 'i')`) ?? [];
-			if (queryResponse != null) {
-				for (const block of queryResponse) {
-					if (block["markdown"] == null || block["markdown"].length <= 5) {
-						continue;
-					}
-					await indexProvider.update(block["root_id"], block["id"], block["markdown"], {}, "block");
-				}
-			}
-		} else if (dbItem["type"] === "p") {
-			await indexProvider.update(dbItem["root_id"], docId, content["content"], {}, "block");
-		}
-	} catch (error) {
-		console.error("Index update error:", error);
-		return false;
-	}
-	return true;
+    if (!isValidStr(docId)) return true;
+
+    const dbItem = await getBlockDBItem(docId);
+    if (dbItem == null) {
+        // 批量删除
+        await vectorManager.delete([{ docId: docId, blockId: [] }]);
+        return true;
+    }
+
+    if (!checkPermission(dbItem, ignoreList || [])) {
+        await vectorManager.delete([{ docId: docId, blockId: [] }]);
+        return true;
+    }
+
+    const content = await exportMdContent({ id: docId, refMode: 4, embedMode: 1, yfm: false });
+    
+    try {
+        const chunks: VectorChunk[] = [];
+
+        if (dbItem["type"] === "d") {
+            if (content["content"]?.length > 5) {
+                chunks.push({
+                    id: docId,
+                    type: "document",
+                    content: content["content"],
+                    path: dbItem["path"]
+                });
+            }
+
+            // 获取子块
+            const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE root_id = '${docId}' and type in ('p', 't', 'i')`) ?? [];
+            for (const block of queryResponse) {
+                if (block["markdown"]?.length > 5) {
+                    chunks.push({
+                        id: block["id"],
+                        parentId: docId,
+                        type: "block",
+                        content: block["markdown"],
+                        path: block["path"]
+                    });
+                }
+            }
+        } else if (dbItem["type"] === "p") {
+            chunks.push({
+                id: docId,
+                parentId: dbItem["root_id"],
+                type: "block",
+                content: content["content"],
+                path: dbItem["path"]
+            });
+        }
+
+        if (chunks.length > 0) {
+            await vectorManager.upsert(chunks);
+        }
+    } catch (error) {
+        logPush("Index dispatch error:", error);
+        return false;
+    }
+    return true;
+}
+
+function startCycle() {
+    if (intervalFlag || !indexProvider) return; // 已经在运行或未初始化
+    
+    logPush("Worker cycle started due to new tasks.");
+    idleCycles = 0; // 重置空闲计数
+    
+    intervalFlag = setInterval(async () => {
+        if (working) return;
+        working = true;
+
+        try {
+            if (cacheQueue.hasNext()) {
+                idleCycles = 0; // 只要有任务，重置空闲计数
+                while (cacheQueue.hasNext()) {
+                    let docId = await cacheQueue.consumeOne();
+                    let result = await processDocument(docId);
+                    if (result === false) {
+                        await cacheQueue.addToQueue(docId);
+                        await sleep(10000);
+                        break; // 遇到错误建议跳出本次 while，等待下一轮
+                    }
+                }
+            } else {
+                idleCycles++;
+                logPush(`Worker idle. Cycle: ${idleCycles}/${MAX_IDLE_CYCLES}`);
+            }
+
+            // 检查是否需要停止循环
+            if (idleCycles >= MAX_IDLE_CYCLES) {
+                stopCycle();
+            }
+        } catch (err) {
+            errorPush("Worker interval error:", err);
+        } finally {
+            working = false;
+        }
+    }, INTERVAL_MS);
+}
+
+function stopCycle() {
+    if (intervalFlag) {
+        clearInterval(intervalFlag);
+        intervalFlag = null;
+        logPush("Worker entered sleep mode (3 idle cycles).");
+    }
+}
+
+async function pushToQueueAndStart(ids: string | string[]) {
+    if (Array.isArray(ids)) {
+        await cacheQueue.batchAddToQueue(ids);
+    } else {
+        await cacheQueue.addToQueue(ids);
+    }
+    startCycle(); // 尝试启动（如果已启动会自跳过）
 }
 
 self.onmessage = async function (e) {
-	const { type, payload } = e.data;
-	console.log("Worker received message:", type, payload);
-	try {
-		if (type === "transaction") {
-			// 处理Transaction，假定payload为transaction对象
-			// 这里假定transaction包含docId或blockId
-			let { transactionOriData } = payload;
-			switch (transactionOriData['cmd']) {
-				case "savedoc":
-					// 获取id，加入队列
-					const id = transactionOriData['data']['rootID'];
-					cacheQueue.addToQueue(id);
-					break;
-				case "remove":
-					// 获取id，移除队列
-					break;
-			}
-		} else if (type === "withSubDocs") {
-			let { docId } = payload;
-			// 获取该文档下所有子文档
-			let allDocIds: string[] = await getSubDocIds(docId);
-			// 加入队列
-			await cacheQueue.batchAddToQueue(allDocIds);
-			self.postMessage({ type: "added", docId, subDocCount: allDocIds.length });
-		} else if (type === "onlyDoc") {
-			let { docId } = payload;
-			// 直接加入队列
-			await cacheQueue.addToQueue(docId);
-			self.postMessage({ type: "added", docId });
-		} else if (type === "start") {
-			let { backendBaseURL, apiKey, settings } = payload;
-			g_settings = settings;
-			ignoreList = settings["ignoreDocListStr"].split("\n").map((item: string)=>item.trim()).filter((item: string)=>item!="");
-			// 创建文件夹
-			await init();
-			indexProvider = new MyIndexProvider(backendBaseURL, apiKey);
-			if (intervalFlag) {
-				clearInterval(intervalFlag);
-				intervalFlag = null;
-			}
-			intervalFlag = setInterval(async () => {
-				if (working) return;
-				working = true;
-				try {
-					// 处理队列中的文档
-					console.log("Worker interval triggered", cacheQueue.hasNext());
-					while (cacheQueue.hasNext()) {
-						let docId = await cacheQueue.consumeOne();
-						console.log("Processing document:", docId);
-						// 处理文档
-						let result = await processDocument(docId);
-						if (result === false) {
-							// 处理失败，重新加入队列尾部
-							await cacheQueue.addToQueue(docId);
-							await sleep(10000);
-						}
-						console.log("Document processed:", docId, result);
-					}
-				} catch (err) {
-					console.error("Worker interval error:", err);
+    const { type, payload } = e.data;
+    try {
+        if (type === "transaction") {
+            let { transactionOriData } = payload;
+            switch (transactionOriData['cmd']) {
+                case "savedoc":
+                    const id = transactionOriData['data']['rootID'];
+                    await pushToQueueAndStart(id);
+                    break;
+            }
+        } else if (type === "withSubDocs") {
+            let { docId } = payload;
+            let allDocIds = await getSubDocIds(docId);
+            await pushToQueueAndStart(allDocIds);
+            self.postMessage({ type: "added", docId, subDocCount: allDocIds.length });
+        } else if (type === "onlyDoc") {
+            let { docId } = payload;
+            await pushToQueueAndStart(docId);
+            self.postMessage({ type: "added", docId });
+        } else if (type === "start") {
+			let { servicesConfig, settings } = payload; // 假设传入了多个服务的配置列表
+			
+			// 初始化各个服务
+			for (const conf of servicesConfig) {
+				let service: IVectorStoreService;
+				if (conf.type === "myProvider") {
+					service = new MyIndexProvider();
+				} else if (conf.type === "pinecone") {
+					// service = new PineconeProvider();
 				}
-				console.log("Worker cycle complete");
-				working = false;
-			}, 10000);
-			self.postMessage({ type: "started" });
-		} else if (type === "stop") {
-			if (intervalFlag) {
-				clearInterval(intervalFlag);
-				intervalFlag = null;
+				
+				if (service) {
+					await vectorManager.registerService(conf.id, service, conf.options);
+				}
 			}
-			const {returnType} = payload;
-			if (returnType === "restart") {
-				self.postMessage({ type: "stopped-for-restart" });
-			} else {
-				self.postMessage({ type: "stopped" });
-			}
-		} else if (type === "indexAll"){
-			// 索引所有文档
-			let { notebookList } = payload;
-			for (let notebookId of notebookList) {
-				let allDocIds: string[] = await getSubDocIds(notebookId, true);
-				await cacheQueue.batchAddToQueue(allDocIds);
-			}
-			self.postMessage({ type: "indexAllAdded", notebookCount: notebookList.length }); 
-		} else {
-			self.postMessage({ type: "error", error: "Unknown message type" });
-		}
-	} catch (err) {
-		console.error("Worker error:", err);	
-		self.postMessage({ type: "error", error: err.message });
-	}
+			
+			startCycle(); // 启动上个回答中提到的按需循环逻辑
+		}else if (type === "stop") {
+            stopCycle();
+            self.postMessage({ type: payload.returnType === "restart" ? "stopped-for-restart" : "stopped" });
+        } else if (type === "indexAll") {
+            let { notebookList } = payload;
+            for (let notebookId of notebookList) {
+                let allDocIds = await getSubDocIds(notebookId, true);
+                await pushToQueueAndStart(allDocIds);
+            }
+            self.postMessage({ type: "indexAllAdded", notebookCount: notebookList.length });
+        }
+    } catch (err) {
+        self.postMessage({ type: "error", error: err.message });
+    }
 };
 

@@ -21,7 +21,7 @@ import { checkAndStart, startOnce, useWorker } from "./utils/indexerHelper";
 
 const STORAGE_NAME = "menu-config";
 
-export default class OGSamplePlugin extends Plugin {
+export default class OGVectorClientPlugin extends Plugin {
     private myEventHandler: EventHandler;
 
     async onload() {
@@ -59,14 +59,6 @@ export default class OGSamplePlugin extends Plugin {
         this.myEventHandler.unbindHandler();
         // 移除所有已经插入的导航区
         removeStyle();
-        // 清理绑定的宽度监听
-        if (window["og_hn_observe"]) {
-            for (const key in window["og_hn_observe"]) {
-                debugPush("插件卸载清理observer", key);
-                window["og_hn_observe"][key]?.disconnect();
-            }
-            delete window["og_hn_observe"];
-        }
     }
 
     openSetting() {

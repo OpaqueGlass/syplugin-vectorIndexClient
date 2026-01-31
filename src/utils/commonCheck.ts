@@ -1,3 +1,6 @@
+import { showPluginMessage } from "./common";
+import { lang } from "./lang";
+
 /**
  * 判定字符串是否有效
  * @param s 需要检查的字符串（或其他类型的内容）
