@@ -59,10 +59,10 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 import { lang } from '@/utils/lang';
-import { openRefLinkByAPI, showPluginMessage } from '@/utils/common';
+import { openRefLinkByAPI, showPluginMessage } from '@/utils/pluginCommon';
 import { getPluginInstance } from '@/utils/pluginHelper';
-import { useProvider } from '@/utils/indexerHelper';
-import { checkClipboard } from '@/utils/commonCheck';
+import { useWorker } from '@/utils/indexerHelper';
+import { checkClipboard } from '@/utils/pluginCheck';
 
 // 定义接口
 interface QueryResult {

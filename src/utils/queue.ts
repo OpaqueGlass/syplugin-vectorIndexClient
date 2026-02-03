@@ -1,4 +1,4 @@
-import { generateUUID } from "./common";
+import { generateUUID } from "./pluginCommon";
 import Mutex from "./mutex";
 import { debugPush } from "@/logger";
 

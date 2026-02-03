@@ -1,4 +1,3 @@
-import { showPluginMessage } from "./common";
 import { lang } from "./lang";
 
 /**
@@ -27,15 +26,7 @@ export function isBlankStr(s: any): boolean {
 	return false;
 }
 
-export function checkClipboard(sendMessage = true) {
-    if (!navigator.clipboard) {
-        if (sendMessage) {
-            showPluginMessage(lang("error:clipboard"));
-        }
-        return false;
-    }
-    return true;
-}
+
 
 let cacheIsMacOs = undefined;
 export function isMacOs() {

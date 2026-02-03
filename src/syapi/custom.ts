@@ -1,4 +1,3 @@
-import * as siyuanAPIs from "siyuan";
 import { debugPush, logPush } from "@/logger";
 import { queryAPI, listDocsByPathT, getTreeStat, getCurrentDocIdF, listDocTree, getDocInfo, getRiffDecks } from ".";
 import { isValidStr } from "@/utils/commonCheck";
@@ -101,27 +100,6 @@ export async function isDocEmpty(docId: string, blockCountThreshold = 0) {
     }
 }
 
-export function getActiveDocProtyle() {
-    const allProtyle = {};
-    window.siyuan.layout.centerLayout?.children?.forEach((wndItem) => {
-        wndItem?.children?.forEach((tabItem) => {
-            if (tabItem?.model) {
-                allProtyle[tabItem?.id](tabItem.model?.editor?.protyle);
-            }
-        });
-    });
-}
-
-export function getActiveEditorIds() {
-    let result = [];
-    let id = window.document.querySelector(`.layout__wnd--active [data-type="tab-header"].item--focus`)?.getAttribute("data-id");
-    if (id) return [id];
-    window.document.querySelectorAll(`[data-type="tab-header"].item--focus`).forEach(item=>{
-        let uid = item.getAttribute("data-id");
-        if (uid) result.push(uid);
-    });
-    return result;
-}
 
 
 
@@ -179,46 +157,6 @@ export function transfromAttrToIAL(attrData) {
     result += "}";
     if (result == "{:}") return null;
     return result;
-}
-
-
-export function removeCurrentTabF(docId?:string) {
-    // 获取tabId
-    if (!isValidStr(docId)) {
-        docId = getCurrentDocIdF(true);
-    }
-    if (!isValidStr(docId)) {
-        debugPush("错误的id或多个匹配id");
-        return;
-    }
-    // v3.1.11或以上
-    if (siyuanAPIs?.getAllEditor) {
-        const editor = siyuanAPIs.getAllEditor();
-        let protyle = null;
-        for (let i = 0; i < editor.length; i++) {
-            if (editor[i].protyle.block.rootID === docId) {
-                protyle = editor[i].protyle;
-                break;
-            }
-        }
-        if (protyle) {
-            if (protyle.model.headElement) {
-                if (protyle.model.headElement.classList.contains("item--pin")) {
-                    debugPush("Pin页面，不关闭存在页签");
-                    return;
-                }
-            }
-            //id: string, closeAll = false, animate = true, isSaveLayout = true
-            debugPush("关闭存在页签", protyle?.model?.parent?.parent, protyle.model?.parent?.id);
-            protyle?.model?.parent?.parent?.removeTab(protyle.model?.parent?.id, false, false);
-        } else {
-            debugPush("没有找到对应的protyle，不关闭存在的页签");
-            return;
-        }
-    } else { // v3.1.10或以下
-        return;
-    }
-
 }
 
 export function isValidIdFormat(id: string): boolean {
@@ -304,10 +242,18 @@ export async function getBlockAssets(id:string): Promise<IAssetsDBItem[]> {
  * @param id 文档id
  * @returns 所有下层级文档的id
  */
-export async function getSubDocIds(id:string): Promise<string[]> {
+export async function getSubDocIds(id:string, isNotebook: boolean = false): Promise<string[]> {
     // 添加idx?
-    const docInfo = await getDocDBitem(id);
-    const treeList = await listDocTree(docInfo["box"], docInfo["path"].replace(".sy", ""));
+    let treeList = [];
+    if (isNotebook) {
+        treeList = await listDocTree(id, "/");
+    } else {
+        const docInfo = await getDocDBitem(id);
+        if (docInfo == null) {
+            return [];
+        }
+        treeList = await listDocTree(docInfo["box"], docInfo["path"].replace(".sy", ""));
+    }
     const subIdsSet = new Set();
     function addToSet(obj) {
         if (obj instanceof Array) {

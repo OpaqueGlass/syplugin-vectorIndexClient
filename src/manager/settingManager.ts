@@ -1,16 +1,17 @@
 import { createApp, ref, watch } from "vue";
 import { getPluginInstance } from "@/utils/pluginHelper";
 import { debugPush, logPush, warnPush } from "@/logger";
-import { isMobile } from "@/syapi";
+import { isMobile } from "@/syapi/ui";
 import { isValidStr } from "@/utils/commonCheck";
 import * as siyuan from "siyuan";
 import outdatedSettingVue from "@/components/dialog/outdatedSetting.vue";
-import { generateUUID, showPluginMessage } from "@/utils/common";
+import { showPluginMessage } from "@/utils/pluginCommon";
 import { lang } from "@/utils/lang";
 import { setStyle } from "./setStyle";
 import { CONSTANTS } from "@/constants";
 import { getTabProperties } from "./settingPageManager";
 import { loadAllConfigPropertyFromTabProperty } from "@/utils/settings";
+import { generateUUID } from "@/utils/common";
 
 // const pluginInstance = getPluginInstance();
 

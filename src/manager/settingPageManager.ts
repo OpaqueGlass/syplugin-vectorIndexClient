@@ -1,4 +1,4 @@
-import { showPluginMessage } from "@/utils/common";
+import { showPluginMessage } from "@/utils/pluginCommon";
 import { TabProperty, ConfigProperty, loadAllConfigPropertyFromTabProperty } from "../utils/settings";
 import { indexAll } from "@/utils/indexerHelper";
 

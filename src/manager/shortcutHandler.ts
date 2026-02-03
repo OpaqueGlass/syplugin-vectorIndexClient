@@ -1,4 +1,4 @@
-import { isMobile } from "@/syapi";
+import { isMobile } from "@/syapi/ui";
 import { lang } from "@/utils/lang";
 import { showMessage, Plugin, Dialog } from "siyuan";
 import { createApp } from "vue";
