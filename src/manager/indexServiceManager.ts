@@ -1,4 +1,5 @@
 // vectorManager.ts
+import { warnPush } from "@/logger";
 
 export class VectorServiceManager {
     private services: Map<string, IVectorStoreService> = new Map();
@@ -18,28 +19,66 @@ export class VectorServiceManager {
         this.services.delete(id);
     }
 
-    /**
-     * 派发更新：所有 Service 都要执行
-     */
-    async upsert(chunks: VectorChunk[]): Promise<void> {
-        const tasks = Array.from(this.services.values()).map(s => s.upsert(chunks));
-        await Promise.all(tasks);
+    unregisterAllServices() {
+        this.services.clear();
+    }
+    
+    private async dispatchTask(
+        action: (service: IVectorStoreService) => Promise<void>
+    ): Promise<MultiServiceResponse> {
+        const serviceIds = Array.from(this.services.keys());
+        const tasks = serviceIds.map(async (id) => {
+            const service = this.services.get(id)!;
+            try {
+                await action(service);
+                return { serviceId: id, status: 'fulfilled' } as ServiceResult;
+            } catch (error) {
+                return { serviceId: id, status: 'rejected', reason: error } as ServiceResult;
+            }
+        });
+
+        // 使用 Promise.allSettled 确保所有服务都尝试过
+        const results = await Promise.all(tasks);
+
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        
+        return {
+            total: serviceIds.length,
+            successCount,
+            failCount: serviceIds.length - successCount,
+            details: results
+        };
+    }
+
+    async upsert(chunks: VectorChunk[]): Promise<MultiServiceResponse> {
+        return this.dispatchTask(s => s.upsert(chunks));
+    }
+
+    async delete(targets: DeleteTarget[]): Promise<MultiServiceResponse> {
+        return this.dispatchTask(s => s.delete(targets));
     }
 
     /**
-     * 派发删除
+     * 检索：支持通过 serviceId 指定服务
+     * @param text 搜索文本
+     * @param serviceId 可选，指定要查询的服务 ID
      */
-    async delete(targets: DeleteTarget[]): Promise<void> {
-        const tasks = Array.from(this.services.values()).map(s => s.delete(targets));
-        await Promise.all(tasks);
-    }
+    async query(text: string, serviceId?: string): Promise<QueryResult[]> {
+        // 1. 如果指定了 ID，直接从该服务查询
+        if (serviceId) {
+            const targetService = this.services.get(serviceId);
+            if (!targetService) {
+                throw new Error(`Service with id "${serviceId}" not found.`);
+            }
+            return await targetService.query(text);
+        }
 
-    /**
-     * 检索比较特殊：通常只从主 Service 查询，或者合并结果
-     */
-    async query(text: string): Promise<QueryResult[]> {
-        // 示例：取第一个服务的查询结果
+        // 2. 如果未指定 ID，默认逻辑（例如取第一个服务）
         const firstService = this.services.values().next().value;
-        return firstService ? await firstService.query(text) : [];
+        if (!firstService) {
+            warnPush("没有任何服务处于运行状态");
+            return [];
+        }
+        return await firstService.query(text);
     }
 }

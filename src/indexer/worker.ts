@@ -8,13 +8,10 @@ import { exportMdContent, createFolder, queryAPI, listDocTree } from "@/syapi/in
 import { CacheQueue } from ".";
 import { MyIndexProvider } from "./myProvider";
 import { isValidStr } from "@/utils/commonCheck";
-import { errorPush, logPush } from "@/logger";
+import { debugPush, errorPush, logPush, warnPush } from "@/logger";
 import { VectorServiceManager } from "@/manager/indexServiceManager";
-import { IVectorStoreService, VectorChunk } from "@/services";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
-
-
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 const MAX_IDLE_CYCLES = 3; 
@@ -45,12 +42,30 @@ class VectorIndexer {
     private idleCycles = 0;
     private readonly MAX_IDLE_CYCLES = 3;
     private readonly INTERVAL_MS = 10000;
+	private recentTaskInfo: any[] = [];
+	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
+	private ignoreSingleServiceErrors: boolean = false;
 
 	public ignoreList: string[] = [];
 
     constructor() {
         this.initQueue();
     }
+
+	public test() {
+		warnPush("Worker test function called.");
+	}
+
+	public getRecentTaskInfo() {
+		return this.recentTaskInfo;
+	}
+
+	public appendInfoToRecentTasks(info: any) {
+		this.recentTaskInfo.push(info);
+		if (this.recentTaskInfo.length > 20) {
+			this.recentTaskInfo.shift();
+		}
+	}
 
 	private async initQueue() {
         try {
@@ -62,18 +77,29 @@ class VectorIndexer {
         }
     }
 
-    async start(servicesConfig: any[]) {
-        for (const conf of servicesConfig) {
-            let service;
-            if (conf.type === "myProvider") {
-                service = new MyIndexProvider();
-            }
-            if (service) {
-                await this.vectorManager.registerService(conf.id, service, conf.options);
-            }
-        }
+    async start(globalConfig?: any) {
+		// TODO: 读取配置，初始化服务
+        // for (const conf of servicesConfig) {
+        //     let service;
+        //     if (conf.type === "myProvider") {
+        //         service = new MyIndexProvider();
+        //     }
+        //     if (service) {
+        //         await this.vectorManager.registerService(conf.id, service, conf.options);
+        //     }
+        // }
         this.startCycle();
     }
+
+	async stop() {
+		this.stopCycle();
+	}
+
+	async restart(globalConfig?: any) {
+		await this.stop();
+		this.vectorManager.unregisterAllServices();
+		await this.start(globalConfig);
+	}
 
 	async indexAll(notebookList: string[]) {
 		for (let notebookId of notebookList) {
@@ -87,12 +113,13 @@ class VectorIndexer {
 		if (!isValidStr(docId)) return true;
 
 		const dbItem = await getBlockDBItem(docId);
+		// 不存在的文档则进行删除
 		if (dbItem == null) {
-			// 批量删除
-			await this.vectorManager.delete([{ docId: docId, blockId: [] }]);
+			const result = await this.vectorManager.delete([{ docId: docId, blockId: [] }]);
 			return true;
 		}
 
+		// 移除被设定为无权访问的文档
 		if (!checkPermission(dbItem, this.ignoreList || [])) {
 			await this.vectorManager.delete([{ docId: docId, blockId: [] }]);
 			return true;
@@ -102,7 +129,7 @@ class VectorIndexer {
 		
 		try {
 			const chunks: VectorChunk[] = [];
-
+			// TODO: 考虑一下文档的子块要怎么定义
 			if (dbItem["type"] === "d") {
 				if (content["content"]?.length > 5) {
 					chunks.push({
@@ -138,7 +165,24 @@ class VectorIndexer {
 			}
 
 			if (chunks.length > 0) {
-				await this.vectorManager.upsert(chunks);
+				const result = await this.vectorManager.upsert(chunks);
+				// 部分错误，但不是完全错误
+				if (result.successCount < result.total && result.successCount > 0) {
+					logPush("部分服务中处理失败:", result);
+					if (this.ignoreSingleServiceErrors) {
+						debugPush("忽略单一服务错误，继续下一个文档:", docId);
+						return true;
+					} else {
+						this.appendInfoToRecentTasks({ docId, result, time: new Date().toISOString() });
+						return false;
+					}
+				} else if (result.successCount === 0) {
+					errorPush("所有服务均处理失败:", result);
+					this.appendInfoToRecentTasks({ docId, result, time: new Date().toISOString() });
+					return false;
+				} else {
+					debugPush("文档处理成功:", docId, result);
+				}
 			}
 		} catch (error) {
 			logPush("Index dispatch error:", error);

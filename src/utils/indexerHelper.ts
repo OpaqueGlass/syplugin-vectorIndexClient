@@ -1,18 +1,16 @@
-import { logPush } from "@/logger";
+import { errorPush, logPush, warnPush } from "@/logger";
 import { getGSettings, getReadOnlyGSettings, registerSettingUpdateCallback } from "@/manager/settingManager";
-import { watch } from "vue";
 import * as Comlink from "comlink";
 import type { IVectorIndexer } from "@/indexer/worker";
 
 const rawWorker = new Worker(new URL("@/indexer/worker.ts", import.meta.url));
-const IndexerClass = Comlink.wrap<IVectorIndexer>(rawWorker);
+const VectorIndexer = Comlink.wrap<IVectorIndexer>(rawWorker);
 
-// 1. 创建实例
 let indexerInstance;
 
-export function useWorker() {
+export async function useWorker() {
     if (indexerInstance == null) {
-        indexerInstance = new IndexerClass();
+        indexerInstance = await new VectorIndexer();
     }
     return indexerInstance;
 }
@@ -35,12 +33,12 @@ export async function checkAndStart() {
 
 export async function restartWorker() {
     logPush("请求重启RAG Indexer后台worker");
-    await IndexerClass.restart();
+    await indexerInstance.restart();
 }
 
 export async function indexAll() {
     let notebooks = window.siyuan.notebooks.filter(item => !item.closed).map(item => item.id);
-    await IndexerClass.indexAll(notebooks);
+    await indexerInstance.indexAll(notebooks);
 }
 
 export function setIndexProvider(ip) {
