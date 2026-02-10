@@ -1,4 +1,4 @@
-import { IVectorStoreService, ServiceManifest } from ".";
+import { quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
 
 interface LightRAGConfig {
     baseUrl: string;
@@ -36,11 +36,7 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
                 type: 'select',
                 defaultValue: 'mix',
                 options: [
-                    { label: 'Mix (Recommended)', value: 'mix' },
-                    { label: 'Local (Entities)', value: 'local' },
-                    { label: 'Global (Patterns)', value: 'global' },
-                    { label: 'Hybrid', value: 'hybrid' },
-                    { label: 'Naive (Vector Only)', value: 'naive' }
+                    'mix', 'local', 'global', 'hybrid', 'naive'
                 ]
             },
             {
@@ -52,23 +48,33 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         ]
     };
 
+    getConfig() {
+        return this.config;
+    }
+
+    setEmbeddingService(embeddingService: any): void {
+        // 由LightRAG server设定，此处不使用
+    }
+
     constructor() {
         this.config = { baseUrl: '', topK: 5, mode: 'mix' };
     }
 
     async initialize(config: LightRAGConfig): Promise<void> {
         this.config = config;
+        this.config.baseUrl = this.config.baseUrl.replace(/\/$/, '');
     }
 
     async updateConfig(newConfig: LightRAGConfig): Promise<void> {
         this.config = newConfig;
+        this.config.baseUrl = this.config.baseUrl.replace(/\/$/, '');
     }
 
     /**
      * 通用的 fetch 请求包装
      */
     private async request(path: string, options: RequestInit = {}) {
-        const url = `${this.config.baseUrl.replace(/\/$/, '')}${path}`;
+        const url = `${this.config.baseUrl}${path}`;
         const headers = new Headers(options.headers);
         
         headers.set('Content-Type', 'application/json');
@@ -90,7 +96,7 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
 
     async validateConfig(config: LightRAGConfig): Promise<boolean> {
         try {
-            const url = `${config.baseUrl.replace(/\/$/, '')}/health`;
+            const url = `${config.baseUrl}/health`;
             // 验证时也需要带上 Key
             const headers: Record<string, string> = {};
             if (config.apiKey) {
@@ -109,10 +115,11 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         }
     }
 
-    async upsert(chunks: { text: string; source?: string }[]): Promise<void> {
+    async upsert(chunks: VectorChunk[]): Promise<void> {
+        const filtered = chunks.filter(c => c.type === "doc" && quickCheckIsValidSiyuanId(c.id));
         const payload = {
-            texts: chunks.map(c => c.text),
-            file_sources: chunks.map(c => c.source || 'vite-plugin-note')
+            texts: filtered.map(c => c.content),
+            file_sources: filtered.map(c => c.id || 'vite-plugin-note')
         };
 
         await this.request('/documents/texts', {
@@ -121,12 +128,13 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         });
     }
 
-    async query(text: string): Promise<string> {
+    async query(text: string): Promise<QueryResult[]> {
         const payload = {
             query: text,
             mode: this.config.mode,
             top_k: this.config.topK,
-            stream: false
+            stream: false,
+            include_references: true
         };
 
         const data = await this.request('/query', {
@@ -134,11 +142,21 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
             body: JSON.stringify(payload)
         });
 
-        return data.response;
+        return [{
+            "content": data.response,
+            "ids": data.references.filter(ref => quickCheckIsValidSiyuanId(ref)).map((ref: any) => ref.file_path)
+        }];
     }
 
     async clearAll(): Promise<void> {
         await this.request('/documents', { method: 'DELETE' });
+    }
+
+    async delete(targets: DeleteTarget[]): Promise<void> {
+        const docIds = targets.map(t => t.docId).filter(id => quickCheckIsValidSiyuanId(id));
+        if (docIds.length > 0) {
+            await this.deleteDocuments(docIds);
+        }
     }
 
     /**

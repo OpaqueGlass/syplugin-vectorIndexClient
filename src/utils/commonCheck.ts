@@ -54,3 +54,10 @@ export function isEventCtrlKey(event) {
     }
     return event.ctrlKey;
 }
+
+export function quickCheckIsValidSiyuanId(str: string): boolean {
+    if (!isValidStr(str)) {
+        return false;
+    }
+    return str.length == 22;
+}

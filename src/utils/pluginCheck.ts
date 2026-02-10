@@ -1,3 +1,4 @@
+import { lang } from "./lang";
 import { showPluginMessage } from "./pluginCommon";
 
 export function checkClipboard(sendMessage = true) {

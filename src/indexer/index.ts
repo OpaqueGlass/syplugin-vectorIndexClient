@@ -71,6 +71,10 @@ export class CacheQueue<T> {
         return this.queue.length > 0;
     }
 
+    public size(): number {
+        return this.queue.length;
+    }
+
     /**
      * 将一个新项目添加到队列中。
      * 如果队列中已存在相同的项目（根据idSelector判断），则会先移除旧项目，再将新项目添加到队尾。

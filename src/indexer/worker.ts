@@ -6,12 +6,12 @@
 // 4. 设置与载入队列，定时发送更新请求
 import { exportMdContent, createFolder, queryAPI, listDocTree } from "@/syapi/index";
 import { CacheQueue } from ".";
-import { MyIndexProvider } from "./myProvider";
 import { isValidStr } from "@/utils/commonCheck";
 import { debugPush, errorPush, logPush, warnPush } from "@/logger";
 import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
+import { sleep } from "@/utils/common";
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 const MAX_IDLE_CYCLES = 3; 
@@ -134,7 +134,7 @@ class VectorIndexer {
 				if (content["content"]?.length > 5) {
 					chunks.push({
 						id: docId,
-						type: "document",
+						type: "doc",
 						content: content["content"],
 						parentId: null,
 						path: dbItem["path"]
@@ -207,14 +207,12 @@ class VectorIndexer {
         }
     }
 
-    // 3. 处理带子文档的任务 (直接返回结果，不再手动 postMessage)
     async addWithSubDocs(docId: string) {
         const allDocIds = await getSubDocIds(docId);
         await this.pushToQueueAndStart(allDocIds);
         return { subDocCount: allDocIds.length }; // 直接 return，主线程 await 即可拿到
     }
 
-    // 4. 暴露状态给 UI (可选)
     getQueueStatus() {
         return {
             isWorking: this.working,

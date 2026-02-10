@@ -40,3 +40,18 @@ export function initSettingProperty() {
 export function getTabProperties() {
     return tabProperties;
 }
+
+// 简易路径解析：通过 "a.b.c" 字符串读写对象属性
+export function getValueByPath(obj: any, path: string) {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+};
+
+export function setValueByPath(obj: any, path: string, value: any) {
+    const parts = path.split('.');
+    const last = parts.pop();
+    const target = parts.reduce((acc, part) => {
+        if (!acc[part]) acc[part] = {};
+        return acc[part];
+    }, obj);
+    if (target && last) target[last] = value;
+};

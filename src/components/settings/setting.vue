@@ -21,19 +21,25 @@
                             <template v-if="['TEXTAREA', 'CUSTOM', 'ORDER', 'TIPS'].indexOf(item.type) == -1">
                                 <Item :key="index" :setting-key="item.key"  :config-name="item.configName" :config-desp="item.description">
                                     <template v-if="item.type == 'SWITCH'">
-                                        <Switch v-model="g_setting[item.key]"></Switch>
+                                        <Switch 
+                                        :model-value="getValueByPath(g_setting, item.key)"
+                                        @update:model-value="val=>setValueByPath(g_setting, item.key, val)"
+                                        ></Switch>
                                     </template>
                                     <template v-else-if="item.type == 'SELECT'">
                                         <Select :option-names="item.optionNames" :option-keys="item.options"
-                                            v-model="g_setting[item.key]"></Select>
+                                            :model-value="getValueByPath(g_setting, item.key)"
+                                        @update:model-value="val=>setValueByPath(g_setting, item.key, val)"></Select>
                                     </template>
                                     <template v-else-if="item.type == 'NUMBER'">
                                         <Input :min="item.min" :max="item.max" :type="item.type"
-                                            v-model="g_setting[item.key]"></Input>
+                                            :model-value="getValueByPath(g_setting, item.key)"
+                                        @update:model-value="val=>setValueByPath(g_setting, item.key, val)"></Input>
                                     </template>
                                     <template v-else-if="item.type == 'TEXT'">
                                         <Input :min="item.min" :max="item.max" :type="item.type"
-                                            v-model="g_setting[item.key]"></Input>
+                                            :model-value="getValueByPath(g_setting, item.key)"
+                                        @update:model-value="val=>setValueByPath(g_setting, item.key, val)"></Input>
                                     </template>
                                     <template v-else-if="item.type == 'BUTTON'">
                                         <Button :btn-name="settingLang(item.key)[2]" :btndo="item.btndo"></Button>
@@ -49,11 +55,12 @@
                             <template v-else>
                                 <Block :setting-key="item.key" :config-name="item.configName" :config-desp="item.description">
                                     <template v-if="item.type == 'TEXTAREA'">
-                                        <Textarea v-model="g_setting[item.key]"></Textarea>
+                                        <Textarea :model-value="getValueByPath(g_setting, item.key)"
+                                        @update:model-value="val=>setValueByPath(g_setting, item.key, val)"></Textarea>
                                     </template>
                                     <!-- <template v-else-if="item.type == 'ORDER'">
                                         <Order :option-names="item.optionNames" :option-desps="item.optionDesps" :option-keys="item.options"
-                                            :setting-key="item.key" v-model="g_setting[item.key]"></Order>
+                                            :setting-key="item.key" v-model="createBinding(item.key]"></Order>
                                     </template> -->
                                 </Block>
                             </template>
@@ -70,7 +77,7 @@
 </template>
   
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { settingLang, settingPageLang } from '@/utils/lang';
 import Page from './page.vue';
 import Column from './column.vue';
@@ -83,7 +90,7 @@ import Select from './items/select.vue';
 import Textarea from './items/textarea.vue';
 // import Order from './items/order.vue'; // 由于sortablejs默认对document绑定事件，在不需要使用该功能的插件上可能影响性能，本模板自v0.1.0其默认禁用；要使用此依赖，需要重新引入sortablejs，一并取消上面ORDER类型的注释；
 import { getGSettings } from '@/manager/settingManager';
-import { getTabProperties } from '@/manager/settingPageManager';
+import { getTabProperties, getValueByPath, setValueByPath } from '@/manager/settingPageManager';
 // const props = defineProps<{
 //     tabs: Array<ITabProperty>
 // }>();
@@ -93,9 +100,15 @@ const g_setting = getGSettings();
 const tabList = getTabProperties();
 
 const activeTab = ref(tabList[0].key);
-// 这里或许应该动态创建tabs组件实例（动态创建tabPage）
 
-// tab需要有个列表，然后watch activeTab的变化，切换到对应的组件
+
+// 创建动态计算属性
+const createBinding = (path: string) => {
+    return computed({
+        get: () => getValueByPath(g_setting.value, path),
+        set: (newValue) => setValueByPath(g_setting.value, path, newValue)
+    });
+};
 
 function changeTab(key: string) {
     activeTab.value = key;

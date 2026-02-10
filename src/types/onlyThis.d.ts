@@ -32,7 +32,7 @@ interface VectorChunk {
   id: string;
   path: string;
   parentId: string;
-  type: string;
+  type: "doc"|"block";
   content: string;
 }
 
@@ -40,7 +40,7 @@ interface VectorChunk {
  * query 返回的元素格式
  */
 interface QueryResult {
-  id: string;
+  ids?: string[];
   content: string;
 }
 
@@ -49,7 +49,7 @@ interface QueryResult {
  */
 interface DeleteTarget {
   docId: string;
-  blockId: string[]; // 指定文档下需要删除的块 ID 数组
+  blockId?: string[]; // 指定文档下需要删除的块 ID 数组
 }
 
 interface IVectorStoreService<TConfig = any> {
