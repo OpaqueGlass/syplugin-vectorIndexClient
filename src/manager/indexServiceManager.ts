@@ -81,4 +81,8 @@ export class VectorServiceManager {
         }
         return await firstService.query(text);
     }
+
+    getServiceCounts() {
+        return this.services.size;
+    }
 }

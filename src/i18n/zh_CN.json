@@ -52,6 +52,19 @@
     "settingpage_advanced_name": "高级",
     "setting_fullyIndex_btn": "开始全量索引",
 
+    "setting_lightRAG.enabled_name": "启用 lightRAG",
+    "setting_lightRAG.enabled_desp": "开启后 将使用 lightRAG 作为向量索引服务",
+    "setting_lightRAG.baseUrl_name": "服务地址",
+    "setting_lightRAG.baseUrl_desp": "填写 lightRAG 服务的基础访问地址",
+    "setting_lightRAG.apiKey_name": "API 密钥",
+    "setting_lightRAG.apiKey_desp": "输入用于访问 lightRAG 服务的 API Key. 不存在请留空",
+    "settingpage_lightRAG_name": "lightRAG",
+
+    "menu_indexSelectDoc": "索引文档",
+    "menu_indexSelectDocWithSub": "索引文档及子文档",
+
+    "msg_pushToQueue": "已将文档提交到索引队列，稍后可在插件设置查看索引状态",
+
     "setting_baseURL_name": "基础地址",
     "setting_baseURL_desp": "向量索引服务器的基础地址。",
     "setting_apiKey_name": "API密钥",

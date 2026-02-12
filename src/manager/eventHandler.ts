@@ -2,8 +2,10 @@ import { getPluginInstance } from "@/utils/pluginHelper";
 import Mutex from "@/utils/mutex";
 import { getReadOnlyGSettings } from "@/manager/settingManager";
 import { IEventBusMap } from "siyuan";
-import { logPush } from "@/logger";
-import { useQueue, useWorker } from "@/utils/indexerHelper";
+import { errorPush, logPush } from "@/logger";
+import { useWorker } from "@/utils/indexerHelper";
+import { showPluginMessage } from "@/utils/pluginCommon";
+import { lang } from "@/utils/lang";
 export default class EventHandler {
     private handlerBindList: Record<string, (arg1: CustomEvent)=>void> = {
         "loaded-protyle-static": this.loadedProtyleRetryEntry.bind(this), // mutex需要访问EventHandler的属性
@@ -57,29 +59,33 @@ export default class EventHandler {
 
     async openMenuDocTreeHandler(event: CustomEvent<IEventBusMap["open-menu-doctree"]>) {
         logPush("data", event.detail);
-        const worker = useWorker();
         if (event.detail.type !== "notebook") {
             if (event.detail.menu.menus && event.detail.menu.menus.length >= 1) {
                 event.detail.menu.addSeparator();
             }
             event.detail.menu.addItem({
-                "label": "对所选文档进行索引",
-                "click": (element, mouseEvent)=>{
+                "label": "[vic] " + lang("menu_indexSelectDoc"),
+                "click": async (element, mouseEvent)=>{
                     const idList = [].map.call(event.detail.elements, (item)=>item.getAttribute("data-node-id"));
-                    for (let id of idList) {
-                        worker.postMessage({ type: "onlyDoc", payload: { docId: id } });
-                    }
+                    logPush("innerdata", event.detail, idList);
+                    const worker = await useWorker();
+                    logPush("myworker", worker);
+                    worker.pushToQueueAndStart(idList).catch(errorPush);
+                    showPluginMessage(lang("msg_pushToQueue"));
                 }
             });
             event.detail.menu.addItem({
-                "label": "对所选文档及其下层文档进行索引",
-                "click": (element, mouseEvent)=>{
+                "label": "[vic] " + lang("menu_indexSelectDocWithSub"),
+                "click": async (element, mouseEvent)=>{
+                    logPush("dinnerdataa", event.detail);
                     let parentIdList = [].map.call(event.detail.elements, (item)=>item.getAttribute("data-node-id"));
                     const resultIds = [];
                     resultIds.push(...parentIdList);
+                    const worker = await useWorker();
                     for (let id of parentIdList) {
-                        worker.postMessage({ type: "withSubDocs", payload: { docId: id } });
+                        worker.addWithSubDocs(id).catch(errorPush);
                     }
+                    showPluginMessage(lang("msg_pushToQueue"));
                 }
             });
             // event.detail.menu.addItem({

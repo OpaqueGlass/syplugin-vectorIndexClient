@@ -15,18 +15,19 @@ export function initSettingProperty() {
     tabProperties.push(
         new TabProperty({
             key: "general", iconKey: "iconSettings", props: [
-                new ConfigProperty({ key: "baseURL", type: "TEXT" }),
-                new ConfigProperty({ key: "apiKey", type: "TEXT" }),
-            ]
-        }),
-        new TabProperty({
-            key: "advanced", iconKey: "iconSettings", props: [
                 new ConfigProperty({ key: "autoUpdate", type: "SWITCH" }),
                 new ConfigProperty({ key: "fullyIndex", type: "BUTTON", btndo: ()=>{
                     indexAll();
                     showPluginMessage("已创建后台任务")} 
                 }),
                 new ConfigProperty({ key: "ignoreDocListStr", type: "TEXTAREA" }),
+            ]
+        }),
+        new TabProperty({
+            key: "lightRAG", iconKey: "iconTheme", props: [
+                new ConfigProperty({ key: "lightRAG.enabled", type: "SWITCH" }),
+                new ConfigProperty({ key: "lightRAG.baseUrl", type: "TEXT" }),
+                new ConfigProperty({ key: "lightRAG.apiKey", type: "TEXT" }),
             ]
         }),
         new TabProperty({

@@ -12,6 +12,8 @@ import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
 import { sleep } from "@/utils/common";
+import { INDEXER_CONSTANTS } from "@/constants";
+import { LightRAGService } from "@/services/lightRAG";
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 const MAX_IDLE_CYCLES = 3; 
@@ -48,6 +50,10 @@ class VectorIndexer {
 
 	public ignoreList: string[] = [];
 
+	private IndexerServices: { [key: string]: any } = {
+		[INDEXER_CONSTANTS.LIGHTRAG]: LightRAGService,
+	};
+
     constructor() {
         this.initQueue();
     }
@@ -79,15 +85,18 @@ class VectorIndexer {
 
     async start(globalConfig?: any) {
 		// TODO: 读取配置，初始化服务
-        // for (const conf of servicesConfig) {
-        //     let service;
-        //     if (conf.type === "myProvider") {
-        //         service = new MyIndexProvider();
-        //     }
-        //     if (service) {
-        //         await this.vectorManager.registerService(conf.id, service, conf.options);
-        //     }
-        // }
+		const allPluginedIndexers = Object.values(INDEXER_CONSTANTS);
+		for (const indexerId of allPluginedIndexers) {
+			if (globalConfig && globalConfig[indexerId]) {
+				const config = globalConfig[indexerId];
+				if (config["enabled"] === true && this.IndexerServices[indexerId]) {
+					let service = new this.IndexerServices[indexerId]();
+					if (service) {
+						await this.vectorManager.registerService(indexerId, service, config || {});
+					}
+				}
+			}
+		}
         this.startCycle();
     }
 
@@ -192,6 +201,8 @@ class VectorIndexer {
 	}
 
 	async pushToQueueAndStart(ids: string | string[]) {
+		logPush("Adding to index queue:", ids);
+		console.log("Adding to index queue:", ids);
 		if (Array.isArray(ids)) {
 			await this.cacheQueue.batchAddToQueue(ids);
 		} else {
@@ -220,15 +231,21 @@ class VectorIndexer {
         };
     }
 	startCycle() {
-		if (this.intervalFlag || !this.vectorManager) return; // 已经在运行或未初始化
-		
+		if (this.intervalFlag || !this.vectorManager) {
+			debugPush("Worker cycle already running or not initialized.");
+			return;
+		};
+		if (this.vectorManager.getServiceCounts() === 0) {
+			debugPush("No active indexer services. Worker will not start cycle.");
+			return;
+		}
 		logPush("Worker cycle started due to new tasks.");
 		this.idleCycles = 0; // 重置空闲计数
 		
 		this.intervalFlag = setInterval(async () => {
 			if (this.working) return;
 			this.working = true;
-
+			debugPush("Worker cycle tick.");
 			try {
 				if (this.cacheQueue.hasNext()) {
 					this.idleCycles = 0; // 只要有任务，重置空闲计数
@@ -248,6 +265,10 @@ class VectorIndexer {
 
 				// 检查是否需要停止循环
 				if (this.idleCycles >= MAX_IDLE_CYCLES) {
+					this.stopCycle();
+				}
+				if (this.vectorManager.getServiceCounts() === 0) {
+					logPush("No active indexer services. Worker will stop cycle.");
 					this.stopCycle();
 				}
 			} catch (err) {

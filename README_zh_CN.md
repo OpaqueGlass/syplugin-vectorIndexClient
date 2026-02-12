@@ -1,6 +1,6 @@
 # 向量检索客户端插件
 
-> 为[思源笔记](https://github.com/siyuan-note/siyuan)提供向量检索的插件（需配合[服务端](https://github.com/OpaqueGlass/simple-rag-server)一同使用）。
+> 为[思源笔记](https://github.com/siyuan-note/siyuan)提供向量检索的插件（需配合指定的服务端一同使用）。
 
 > 当前版本: v0.1.0
 >
@@ -12,10 +12,23 @@
 
 - 从集市下载 或 1、解压Release中的`package.zip`，2、将文件夹移动到`工作空间/data/plugins/`，3、并将文件夹重命名为`syplugin-vectorIndexClient`;
 - 开启插件；
-- 打开插件设置，配置服务端地址；
+- 参考服务端支持列表，安装部署服务端；
+- 打开插件设置，完成服务端地址等配置；
 - 在思源设置中配置快捷键，以打开搜索面板；
 
 > ⭐ 如果这对你有帮助，请考虑点亮Star！
+
+## 🖥️服务端支持列表
+
+> 本插件为独立第三方插件，与各服务端无官方关联。使用过程中如遇到问题，服务端开发者可能无法提供支持。请留意区分问题归属，请勿在服务端 GitHub 仓库中反馈本插件相关问题。
+>
+> 能力与精力有限，（1）要支持更多服务端，欢迎贡献代码提交PR；（2）本插件 GitHub 仓库不处理服务端安装部署时遇到的问题。
+
+| 状态 | 服务端名称 | 服务端部署参考文档（应该是官方） | 备注 |
+| ------ | ------------ | ---------------------------------- | ------ |
+| ✅   | [LightRAG](https://github.com/HKUDS/LightRAG)           | [https://github.com/HKUDS/LightRAG/blob/main/README-zh.md#%E5%AE%89%E8%A3%85lightrag%E6%9C%8D%E5%8A%A1%E5%99%A8](https://github.com/HKUDS/LightRAG/blob/main/README-zh.md#%E5%AE%89%E8%A3%85lightrag%E6%9C%8D%E5%8A%A1%E5%99%A8)                                 |      |
+| 🔜   |            |                                  |      |
+| ❌   |            |                                  |      |
 
 ## 🙏参考&感谢
 

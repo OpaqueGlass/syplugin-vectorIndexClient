@@ -62,12 +62,12 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
 
     async initialize(config: LightRAGConfig): Promise<void> {
         this.config = config;
-        this.config.baseUrl = this.config.baseUrl.replace(/\/$/, '');
+        this.config.baseUrl = this.config.baseUrl?.replace(/\/$/, '') || '';
     }
 
     async updateConfig(newConfig: LightRAGConfig): Promise<void> {
         this.config = newConfig;
-        this.config.baseUrl = this.config.baseUrl.replace(/\/$/, '');
+        this.config.baseUrl = this.config.baseUrl?.replace(/\/$/, '') || '';
     }
 
     /**
@@ -79,7 +79,6 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         
         headers.set('Content-Type', 'application/json');
         
-        // --- 修正点：使用 X-API-Key 字段 ---
         if (this.config.apiKey) {
             headers.set('X-API-Key', this.config.apiKey);
         }

@@ -12,6 +12,7 @@ import { CONSTANTS } from "@/constants";
 import { getTabProperties } from "./settingPageManager";
 import { loadAllConfigPropertyFromTabProperty } from "@/utils/settings";
 import { generateUUID } from "@/utils/common";
+import { restartWorker } from "@/utils/indexerHelper";
 
 // const pluginInstance = getPluginInstance();
 
@@ -24,6 +25,11 @@ let defaultSetting: IPluginSettings = {
     apiKey: "",
     autoUpdate: false,
     ignoreDocListStr: "20210808180117-czj9bvb\n",
+    lightRAG: {
+        enabled: false,
+        baseURL: "http://localhost:9621",
+        apiKey: "",
+    }
 }
 
 
@@ -105,6 +111,7 @@ export async function loadSettings() {
             // logPush("保存设置项", newVal);
             setStyle();
             changeDebug(newVal);
+            restartWorker(newVal);
             for (let callback of updateCallbackList) {
                 try {
                     callback(newVal);
