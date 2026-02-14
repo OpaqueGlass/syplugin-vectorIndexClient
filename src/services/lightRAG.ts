@@ -11,7 +11,7 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
     private config: LightRAGConfig;
 
     static manifest: ServiceManifest = {
-        id: 'lightrag',
+        id: 'lightRAG',
         name: 'LightRAG Server',
         description: 'Retrieval-Augmented Generation with graph support.',
         capabilities: { requiresExternalEmbedding: false },
@@ -114,6 +114,10 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         }
     }
 
+    async healthCheck(): Promise<boolean> {
+        return await this.validateConfig(this.config);
+    }
+
     async upsert(chunks: VectorChunk[]): Promise<void> {
         const filtered = chunks.filter(c => c.type === "doc" && quickCheckIsValidSiyuanId(c.id));
         const payload = {
@@ -143,7 +147,7 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
 
         return [{
             "content": data.response,
-            "ids": data.references.filter(ref => quickCheckIsValidSiyuanId(ref)).map((ref: any) => ref.file_path)
+            "ids": data.references.filter(ref => quickCheckIsValidSiyuanId(ref.file_path)).map((ref: any) => ref.file_path)
         }];
     }
 

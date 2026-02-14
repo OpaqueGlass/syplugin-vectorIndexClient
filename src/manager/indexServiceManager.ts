@@ -12,6 +12,21 @@ export class VectorServiceManager {
         this.services.set(id, service);
     }
 
+    async getRegisteredServices() {
+        return Array.from(this.services.keys());
+    }
+
+    async getAvailableServices() {
+        const allServices = Array.from(this.services.entries());
+        const results = await Promise.all(
+            allServices.map(async ([id, service]) => {
+                const isHealthy = await service.healthCheck();
+                return isHealthy ? id : null;
+            })
+        );
+        return results.filter(id => id !== null);
+    }
+
     /**
      * 移除服务
      */

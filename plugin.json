@@ -7,12 +7,12 @@
   "backends": ["all"],
   "frontends": ["all"],
   "displayName": {
-    "en_US": "Vector Search Client",
-    "zh_CN": "向量搜索（客户端）"
+    "en_US": "Vector Index Client",
+    "zh_CN": "向量搜索客户端"
   },
   "description": {
-    "en_US": "Work with ",
-    "zh_CN": "使用Chroma等向量数据库，完成笔记内容的向量化与检索。"
+    "en_US": "Integrate vector indexing databases or retrieval-augmented services, converting note content into vector indexes to provide semantic search capabilities.",
+    "zh_CN": "接入向量索引数据库或检索增强服务，将笔记内容转换为向量索引，提供基于语义的搜索能力。目前只支持LightRAG"
   },
   "readme": {
     "en_US": "README.md",

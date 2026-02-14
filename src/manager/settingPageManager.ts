@@ -20,14 +20,20 @@ export function initSettingProperty() {
                     indexAll();
                     showPluginMessage("已创建后台任务")} 
                 }),
+                new ConfigProperty({ key: "filterMinChar", type: "NUMBER" }),
                 new ConfigProperty({ key: "ignoreDocListStr", type: "TEXTAREA" }),
             ]
         }),
         new TabProperty({
             key: "lightRAG", iconKey: "iconTheme", props: [
+                new ConfigProperty({ key: "aboutLightRAG", type: "TIPS" }),
                 new ConfigProperty({ key: "lightRAG.enabled", type: "SWITCH" }),
                 new ConfigProperty({ key: "lightRAG.baseUrl", type: "TEXT" }),
                 new ConfigProperty({ key: "lightRAG.apiKey", type: "TEXT" }),
+                new ConfigProperty({ key: "lightRAG.topK", type: "NUMBER" }),
+                new ConfigProperty({ key: "lightRAG.test", type: "BUTTON", btndo: ()=>{
+                    
+                }}),
             ]
         }),
         new TabProperty({

@@ -10,12 +10,7 @@
                     :placeholder="lang('search_placeholder')" @keyup.enter="performSearch" ref="searchInput" />
             </div>
             <select v-model="ragType" class="b3-select">
-                <option value="lightrag">lightrag</option>
-                <option value="chroma">chroma</option>
-            </select>
-            <select v-model="searchType" v-if="ragType != 'lightrag'" class="b3-select">
-                <option value="document">document</option>
-                <option value="block">block</option>
+                <option value="lightRAG">lightrag</option>
             </select>
             <button @click="performSearch" class="b3-button b3-button--primary">{{ lang('search') }}</button>
         </div>
@@ -28,12 +23,11 @@
                     class="b3-list-item"
                     @click="onItemClick(item)">
                     <span class="b3-list-item__text" style="white-space: normal; line-height: 1.5;">{{ item.content }}</span>
-                    <span class="b3-list-item__meta" v-if="item.metadata">{{ JSON.stringify(item.metadata) }}</span>
                 </li>
             </ul>
 
             <!-- Lightrag result (single preview) -->
-            <div v-if="!isLoading && searchResults.length > 0 && ragType === 'lightrag'" 
+            <div v-if="!isLoading && searchResults.length > 0 && ragType === 'lightRAG'" 
                  style="padding: 15px; line-height: 1.6; white-space: pre-wrap; height: 100%; overflow-y: auto; display: flex; flex-direction: column; justify-content: space-between;">
                  <div style="text-align: right; margin-top: 10px;">
                     <button @click="onCopyItem(searchResults[0])" class="b3-button">{{ lang('copy_item') }}</button>
@@ -60,17 +54,11 @@
 import { ref, onMounted } from 'vue';
 import { lang } from '@/utils/lang';
 import { openRefLinkByAPI, showPluginMessage } from '@/utils/pluginCommon';
-import { getPluginInstance } from '@/utils/pluginHelper';
 import { useWorker } from '@/utils/indexerHelper';
 import { checkClipboard } from '@/utils/pluginCheck';
-
-// 定义接口
-interface QueryResult {
-    docId: string;
-    blockId: string | null;
-    content: string;
-    metadata: any;
-}
+import { debugPush, errorPush, logPush } from '@/logger';
+import { isValidStr } from '@/utils/commonCheck';
+import { getBlockDBItem } from '@/syapi/custom';
 
 const props = defineProps<{
     dialog?: {
@@ -81,12 +69,11 @@ const props = defineProps<{
 }>();
 
 const searchQuery = ref('');
-const ragType = ref('chroma');
+const ragType = ref('lightRAG');
 const searchResults = ref<QueryResult[]>([]);
 const isLoading = ref(false);
 const hasSearched = ref(false);
 const searchInput = ref<HTMLInputElement | null>(null);
-const searchType = ref("document");
 
 // 搜索函数
 const performSearch = async () => {
@@ -96,36 +83,28 @@ const performSearch = async () => {
     hasSearched.value = true;
     searchResults.value = [];
 
-    const plugin = getPluginInstance();
-    if (!plugin) {
-        console.error("Plugin instance not found");
-        isLoading.value = false;
-        return;
-    }
-
     try {
-        const provider = useProvider();
-        let serachTypeStr = searchType.value;
-        if (ragType.value == "lightrag") {
-            serachTypeStr = "document";
-        }
-        const data = await provider.query(searchQuery.value, serachTypeStr, 30, ragType.value);
+        const worker = await useWorker();
+        const data = await worker.query(searchQuery.value.trim(), ragType.value);
+        debugPush("queryResult", data)
         searchResults.value = data as QueryResult[];
     } catch (error) {
-        console.error('Search failed:', error);
+        errorPush('Search failed:', error);
     } finally {
         isLoading.value = false;
     }
 };
 
 // 列表项点击事件
-const onItemClick = (item: QueryResult) => {
-    const idToOpen = item.blockId || item.docId;
-    if (idToOpen) {
+const onItemClick = async (item: QueryResult) => {
+    const idToOpen = item.ids && item.ids.length > 0 && item.ids[0];
+    if (isValidStr(idToOpen) && await getBlockDBItem(idToOpen)) {
         openRefLinkByAPI({ paramDocId: idToOpen });
         if (props.dialog) {
             props.dialog.destroy();
         }
+    } else {
+        showPluginMessage("对应ID不存在，无法打开，可能是索引后至今存在删改");
     }
 };
 
@@ -137,8 +116,12 @@ const onCopyItem = (result: QueryResult) => {
     showPluginMessage(lang("success:copy"));
 };
 
-onMounted(() => {
+
+onMounted(async () => {
     searchInput.value?.focus();
+    const worker = await useWorker();
+    const vectorManager = await worker.getAllRegisteredServices();
+    logPush("rags", vectorManager)
 });
 
 </script>

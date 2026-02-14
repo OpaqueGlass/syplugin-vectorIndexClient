@@ -26,7 +26,6 @@ export default class OGVectorClientPlugin extends Plugin {
 
     async onload() {
         this.data[STORAGE_NAME] = {readonlyText: "Readonly"};
-        logPush("测试", this.i18n);
         setLanguage(this.i18n);
         setPluginInstance(this);
         initSettingProperty();

@@ -29,7 +29,8 @@ let defaultSetting: IPluginSettings = {
         enabled: false,
         baseURL: "http://localhost:9621",
         apiKey: "",
-    }
+    },
+    filterMinChar: 5,
 }
 
 

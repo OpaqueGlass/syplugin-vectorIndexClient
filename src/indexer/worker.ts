@@ -16,8 +16,6 @@ import { INDEXER_CONSTANTS } from "@/constants";
 import { LightRAGService } from "@/services/lightRAG";
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
-const MAX_IDLE_CYCLES = 3; 
-const INTERVAL_MS = 10000;
 
 function checkPermission(dbItem, ignoreList: string[]): boolean {
 	const notebookId = dbItem.box;
@@ -45,6 +43,7 @@ class VectorIndexer {
     private readonly MAX_IDLE_CYCLES = 3;
     private readonly INTERVAL_MS = 10000;
 	private recentTaskInfo: any[] = [];
+	private g_setting_cache: any = null;
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
 
@@ -84,19 +83,23 @@ class VectorIndexer {
     }
 
     async start(globalConfig?: any) {
-		// TODO: 读取配置，初始化服务
+		debugPush("Worker starting");
+;		// TODO: 读取配置，初始化服务
 		const allPluginedIndexers = Object.values(INDEXER_CONSTANTS);
 		for (const indexerId of allPluginedIndexers) {
 			if (globalConfig && globalConfig[indexerId]) {
 				const config = globalConfig[indexerId];
 				if (config["enabled"] === true && this.IndexerServices[indexerId]) {
+					debugPush("Initializing indexer service:", indexerId);
 					let service = new this.IndexerServices[indexerId]();
 					if (service) {
 						await this.vectorManager.registerService(indexerId, service, config || {});
 					}
+					debugPush("Service initialized:", indexerId);
 				}
 			}
 		}
+		this.g_setting_cache = globalConfig;
         this.startCycle();
     }
 
@@ -108,6 +111,18 @@ class VectorIndexer {
 		await this.stop();
 		this.vectorManager.unregisterAllServices();
 		await this.start(globalConfig);
+	}
+
+	async query(text: string, serviceId?: string){
+		return await this.vectorManager.query(text, serviceId);
+	}
+
+	async getAvailableServices() {
+		return await this.vectorManager.getAvailableServices();
+	}
+
+	async getAllRegisteredServices() {
+		return await this.vectorManager.getRegisteredServices();
 	}
 
 	async indexAll(notebookList: string[]) {
@@ -135,12 +150,14 @@ class VectorIndexer {
 		}
 
 		const content = await exportMdContent({ id: docId, refMode: 4, embedMode: 1, yfm: false });
-		
+		if (content !== null && content["content"] != undefined) {
+			content["content"] = content["content"].trim();
+		}
 		try {
 			const chunks: VectorChunk[] = [];
 			// TODO: 考虑一下文档的子块要怎么定义
 			if (dbItem["type"] === "d") {
-				if (content["content"]?.length > 5) {
+				if (content["content"]?.length > this.g_setting_cache["filterMinChar"]) {
 					chunks.push({
 						id: docId,
 						type: "doc",
@@ -153,7 +170,8 @@ class VectorIndexer {
 				// 获取子块
 				const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE root_id = '${docId}' and type in ('p', 't', 'i')`) ?? [];
 				for (const block of queryResponse) {
-					if (block["markdown"]?.length > 5) {
+					block["markdown"] = block["markdown"]?.trim();
+					if (block["markdown"]?.length > this.g_setting_cache["filterMinChar"]) {
 						chunks.push({
 							id: block["id"],
 							parentId: docId,
@@ -174,12 +192,13 @@ class VectorIndexer {
 			}
 
 			if (chunks.length > 0) {
+				debugPush("Processing document:", docId, "with chunks:", chunks);
 				const result = await this.vectorManager.upsert(chunks);
 				// 部分错误，但不是完全错误
 				if (result.successCount < result.total && result.successCount > 0) {
 					logPush("部分服务中处理失败:", result);
 					if (this.ignoreSingleServiceErrors) {
-						debugPush("忽略单一服务错误，继续下一个文档:", docId);
+						logPush("忽略单一服务错误，继续下一个文档:", docId);
 						return true;
 					} else {
 						this.appendInfoToRecentTasks({ docId, result, time: new Date().toISOString() });
@@ -260,11 +279,11 @@ class VectorIndexer {
 					}
 				} else {
 					this.idleCycles++;
-					logPush(`Worker idle. Cycle: ${this.idleCycles}/${MAX_IDLE_CYCLES}`);
+					logPush(`Worker idle. Cycle: ${this.idleCycles}/${this.MAX_IDLE_CYCLES}`);
 				}
 
 				// 检查是否需要停止循环
-				if (this.idleCycles >= MAX_IDLE_CYCLES) {
+				if (this.idleCycles >= this.MAX_IDLE_CYCLES) {
 					this.stopCycle();
 				}
 				if (this.vectorManager.getServiceCounts() === 0) {
@@ -276,7 +295,7 @@ class VectorIndexer {
 			} finally {
 				this.working = false;
 			}
-		}, INTERVAL_MS);
+		}, this.INTERVAL_MS);
 	}
 
 	stopCycle() {
