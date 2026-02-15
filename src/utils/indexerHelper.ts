@@ -2,6 +2,7 @@ import { debugPush, errorPush, logPush, warnPush } from "@/logger";
 import { getGSettings, getReadOnlyGSettings, registerSettingUpdateCallback } from "@/manager/settingManager";
 import * as Comlink from "comlink";
 import type { IVectorIndexer } from "@/indexer/worker";
+import VectorWorker from "@/indexer/worker?worker";
 import { showPluginMessage } from "./pluginCommon";
 
 let rawWorker: Worker | null = null;
@@ -23,9 +24,10 @@ export async function useWorker(timeoutMs = 15000): Promise<IVectorIndexer> {
 
     try {
         if (!rawWorker) {
-            rawWorker = new Worker(new URL("@/indexer/worker.ts", import.meta.url), {
-                type: 'module'
-            });
+            // rawWorker = new Worker(new URL("@/indexer/worker.ts", import.meta.url), {
+            //     type: 'module'
+            // });
+            rawWorker = new VectorWorker();
         }
 
         const VectorIndexerProxy = Comlink.wrap<any>(rawWorker);

@@ -12,11 +12,11 @@ export class VectorServiceManager {
         this.services.set(id, service);
     }
 
-    async getRegisteredServices() {
+    async getRegisteredServicesIds() {
         return Array.from(this.services.keys());
     }
 
-    async getAvailableServices() {
+    async getAvailableServicesIds() {
         const allServices = Array.from(this.services.entries());
         const results = await Promise.all(
             allServices.map(async ([id, service]) => {
@@ -25,6 +25,10 @@ export class VectorServiceManager {
             })
         );
         return results.filter(id => id !== null);
+    }
+
+    getServiceById(id: string) {
+        return this.services.get(id);
     }
 
     /**

@@ -59,6 +59,8 @@ interface IndexStatus {
   pendingDocs: number;
 }
 
+type ServiceQueryType = "search" | "qa";
+
 interface IVectorStoreService<TConfig = any> {
   /**
    * 初始化服务
@@ -110,7 +112,7 @@ interface IVectorStoreService<TConfig = any> {
    * search 主要提供向量检索服务
    * qa 提供问答服务，返回的内容是llm给出的回答而不是原文内容
    */
-  getQueryType(): "search"|"qa";
+  getQueryType(): ServiceQueryType;
 
   /**
    * 获取索引状态，包括是否支持获取状态、失败的文档数量和原因、待处理的文档数量等信息

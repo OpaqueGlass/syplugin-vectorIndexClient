@@ -53,7 +53,7 @@
     "setting_fullyIndex_btn": "开始全量索引",
 
     "setting_aboutLightRAG_name": "关于 lightRAG",
-    "setting_aboutLightRAG_desp": "lightRAG是开发的轻量级向量索引服务。本插件通过API与lightRAG-server进行通信，启用此后端，需要先自行部署lightRAG服务（<a target='_blank' href='https://github.com/HKUDS/LightRAG'>部署教程参考</a>）。",
+    "setting_aboutLightRAG_desp": "lightRAG是HKUDS开发的轻量级检索增强服务，通过构建知识图谱辅助大模型回答用户问题。本插件通过API与lightRAG-server进行通信，启用此后端，需要先自行部署lightRAG服务（<a target='_blank' href='https://github.com/HKUDS/LightRAG'>部署教程参考</a>）。分类：问答。",
     "setting_lightRAG.enabled_name": "启用 lightRAG",
     "setting_lightRAG.enabled_desp": "开启后 将使用 lightRAG 作为向量索引服务",
     "setting_lightRAG.baseUrl_name": "服务地址",
@@ -83,5 +83,7 @@
     "dialog_panel_switchDoc_click": "点击",
     "open_item": "打开",
     "copy_item": "复制",
+    "source": "来源",
+    "no_result": "没有找到相关内容",
     "success:copy": "复制成功！"
 }

@@ -176,4 +176,27 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
             })
         });
     }
+
+    /**
+     * 获取服务类型标识
+     * search 主要提供向量检索服务
+     * qa 提供问答服务，返回的内容是llm给出的回答而不是原文内容
+     */
+    getQueryType(): ServiceQueryType {
+        return "qa"
+    }
+
+    /**
+     * 获取索引状态，包括是否支持获取状态、失败的文档数量和原因、待处理的文档数量等信息
+     */
+    async getIndexStatus(): Promise<IndexStatus>{
+        return null;
+    }
+
+    /**
+     * 重新处理索引失败的文档，通常在用户修复了导致索引失败的问题后调用
+     */
+    async reprocessFailed(): Promise<void> {
+
+    }
 }

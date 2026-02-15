@@ -118,11 +118,19 @@ class VectorIndexer {
 	}
 
 	async getAvailableServices() {
-		return await this.vectorManager.getAvailableServices();
+		return await this.vectorManager.getAvailableServicesIds();
 	}
 
 	async getAllRegisteredServices() {
-		return await this.vectorManager.getRegisteredServices();
+		return await this.vectorManager.getRegisteredServicesIds();
+	}
+
+	getServiceQueryType(serviceId: string) {
+		const service = this.vectorManager.getServiceById(serviceId);
+		if (service && (service as any).getQueryType) {
+			return (service as any).getQueryType();
+		}
+		return null;
 	}
 
 	async indexAll(notebookList: string[]) {
