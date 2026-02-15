@@ -2,12 +2,22 @@
     <div style="height: 100%; display: flex; flex-direction: column; padding: 1.5em; gap: 12px;">
         <div style="display: flex; align-items: center; gap: 12px;">
             <div class="b3-form__icon" style="flex-grow: 1;">
-                <svg class="b3-form__icon-icon" style="width: 18px; height: 18px;">
-                    <use xlink:href="#iconSearch"></use>
-                </svg>
+                <div style="position: absolute; left: 8px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; z-index: 1;" >
+                    <svg class="b3-form__icon-icon" style="width: 16px; height: 16px; position: static;">
+                        <use xlink:href="#iconSearch"></use>
+                    </svg>
+                </div>
+                <div style="position: absolute; left: 20px; top: 0; bottom: 0; display: flex; align-items: center; gap: 4px; z-index: 1;" @click="showHistoryMenu">
+                    <span class="search__history-icon ariaLabel" 
+                        aria-label="Alt+↓" 
+                        style="cursor: pointer; display: flex; align-items: center; padding: 4px 2px;">
+                        <svg style="width: 10px; height: 10px; opacity: 0.5;"><use xlink:href="#iconDown"></use></svg>
+                    </span>
+                </div>
+
                 <input type="text" 
                     class="b3-text-field fn__block b3-form__icon-input" 
-                    style="font-size: 1.1em; padding: 8px 32px;"
+                    style="font-size: 1.1em; padding: 8px 12px 8px 48px;" 
                     v-model="searchQuery"
                     :placeholder="lang('search_placeholder')" 
                     @keyup.enter="performSearch" 
@@ -89,6 +99,8 @@ import { checkClipboard } from '@/utils/pluginCheck';
 import { debugPush, errorPush, logPush } from '@/logger';
 import { isValidStr } from '@/utils/commonCheck';
 import { getBlockDBItem } from '@/syapi/custom';
+import { JSONStorage } from '@/utils/jsonStorageUtil';
+import { Menu } from 'siyuan';
 
 interface DocInfo {
     id: string;
@@ -110,6 +122,13 @@ const isTypeListLoading = ref(true);
 const hasSearched = ref(false);
 const currentServiceMode = ref<ServiceQueryType>('search');
 const searchInput = ref<HTMLInputElement | null>(null);
+const historyList = ref<string[]>([]);
+const STORAGE_KEYS = {
+    LAST_STATE: "last_search_state",
+    HISTORY: "search_history"
+};
+
+const jsonStorage = new JSONStorage("searchui.json");
 
 const fetchDocNamesByIds = async (ids: string[]): Promise<DocInfo[]> => {
     if (!ids || ids.length === 0) return [];
@@ -127,6 +146,79 @@ const fetchDocNamesByIds = async (ids: string[]): Promise<DocInfo[]> => {
     return results;
 };
 
+const saveLastState = () => {
+    const state = {
+        query: searchQuery.value,
+        ragType: ragType.value,
+        results: searchResults.value,
+        resultDocs: resultDocNames.value,
+        mode: currentServiceMode.value
+    };
+    jsonStorage.set(STORAGE_KEYS.LAST_STATE, state);
+};
+
+// 保存到历史列表
+const addToHistory = (query: string) => {
+    if (!query.trim()) return;
+    // 过滤重复并保持最近的在前面
+    const newHistory = [query, ...historyList.value.filter(i => i !== query)].slice(0, 20);
+    historyList.value = newHistory;
+    jsonStorage.set(STORAGE_KEYS.HISTORY, newHistory);
+};
+
+// 加载初始数据
+const loadPersistedData = async () => {
+    // 加载历史列表
+    const history = await jsonStorage.get(STORAGE_KEYS.HISTORY);
+    if (Array.isArray(history)) historyList.value = history;
+
+    // 加载最后一次状态
+    const lastState = await jsonStorage.get(STORAGE_KEYS.LAST_STATE);
+    if (lastState) {
+        searchQuery.value = lastState.query || '';
+        ragType.value = lastState.ragType || '';
+        searchResults.value = lastState.results || [];
+        resultDocNames.value = lastState.resultDocs || {};
+        currentServiceMode.value = lastState.mode || 'search';
+        hasSearched.value = searchResults.value.length > 0;
+    }
+};
+
+// --- 菜单逻辑 ---
+const showHistoryMenu = (event: MouseEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const menu = new Menu();
+    event.preventDefault();
+    event.stopPropagation();
+    if (historyList.value.length === 0) {
+        menu.addItem({ label: lang("no_history"), disabled: true });
+    } else {
+        menu.addItem({
+            label: lang("clear_history"),
+            click: async () => {
+                historyList.value = [];
+                jsonStorage.set(STORAGE_KEYS.HISTORY, []);
+            }
+        });
+        menu.addSeparator();
+        historyList.value.forEach(text => {
+            menu.addItem({
+                label: text,
+                click: () => {
+                    searchQuery.value = text;
+                    performSearch();
+                }
+            });
+        });
+    }
+
+    menu.open({
+        x: rect.left,
+        y: rect.bottom,
+        isLeft: false
+    });
+};
+
 // 监听 ragType 变化，自动更新当前服务的模式 (qa/search)
 watch(ragType, async (newType) => {
     if (!newType) return;
@@ -139,27 +231,30 @@ watch(ragType, async (newType) => {
 const performSearch = async () => {
     if (!searchQuery.value.trim() || !ragType.value) return;
 
+    if (!availableTypes.value.includes(ragType.value)) {
+        showPluginMessage("此后端方案暂不可用，进入插件设置或状态页确认连接情况吧");
+        return;
+    }
     isLoading.value = true;
     hasSearched.value = true;
-    searchResults.value = [];
-    resultDocNames.value = {};
-
+    
     try {
         const worker = await useWorker();
         const data = await worker.query(searchQuery.value.trim(), ragType.value) as QueryResult[];
-        
-        // 限制 QA 模式只取一个结果
         searchResults.value = currentServiceMode.value === 'qa' ? data.slice(0, 1) : data;
 
-        // 异步获取所有结果的来源名称
-        for (let i = 0; i < searchResults.value.length; i++) {
-            const item = searchResults.value[i];
+        // 获取文档名称...
+        const docPromises = searchResults.value.map(async (item, i) => {
             if (item.ids) {
-                fetchDocNamesByIds(item.ids).then(docs => {
-                    resultDocNames.value[i] = docs;
-                });
+                const docs = await fetchDocNamesByIds(item.ids);
+                resultDocNames.value[i] = docs;
             }
-        }
+        });
+        
+        await Promise.all(docPromises);
+        
+        addToHistory(searchQuery.value.trim());
+        saveLastState();
     } catch (error) {
         errorPush('Search failed:', error);
     } finally {
@@ -196,7 +291,10 @@ onMounted(async () => {
         // 获取所有可用服务
         const services = await worker.getAvailableServices() as string[];
         availableTypes.value = services;
-        if (services.length > 0) {
+        // 加载持久化的数据
+        await loadPersistedData();
+
+        if (!ragType.value && services.length > 0) {
             ragType.value = services[0];
         }
     } catch (e) {
@@ -208,7 +306,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 针对思源交互的微调 */
 .b3-list-item:hover {
     background-color: var(--b3-list-hover);
 }
