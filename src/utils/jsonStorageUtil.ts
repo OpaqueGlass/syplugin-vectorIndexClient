@@ -1,6 +1,6 @@
 import { CONSTANTS } from '@/constants';
 import { debugPush, errorPush } from '@/logger';
-import { putJSONFile, getJSONFile } from '@/syapi/index'; // 假设 API 在此处
+import { putJSONFile, getJSONFile } from '@/syapi/index';
 
 /**
  * 定义存储数据的基本约束

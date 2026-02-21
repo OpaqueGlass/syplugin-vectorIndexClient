@@ -1,4 +1,4 @@
-import { createApp, ref, watch } from "vue";
+import { createApp, ref, toRaw, watch } from "vue";
 import { getPluginInstance } from "@/utils/pluginHelper";
 import { debugPush, logPush, warnPush } from "@/logger";
 import { isMobile } from "@/syapi/ui";
@@ -109,10 +109,10 @@ export async function loadSettings() {
         updateTimeout = setTimeout(() => {
             // updateSingleSetting(key, newVal);
             saveSettings(newVal);
-            // logPush("保存设置项", newVal);
+            debugPush("保存设置项", newVal);
             setStyle();
             changeDebug(newVal);
-            restartWorker(newVal);
+            restartWorker(toRaw(newVal));
             for (let callback of updateCallbackList) {
                 try {
                     callback(newVal);

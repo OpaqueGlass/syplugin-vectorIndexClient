@@ -54,9 +54,9 @@ interface DeleteTarget {
 
 interface IndexStatus {
   isSupportGetStatus: boolean;
-  failedDocs: number;
-  failedReason: string;
-  pendingDocs: number;
+  failedCount: number;
+  failedReasons: string[];
+  pendingCount: number;
 }
 
 type ServiceQueryType = "search" | "qa";

@@ -1,4 +1,8 @@
-import { quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
+import { UpsertError } from "@/exceptions/upsertError";
+import { errorPush, logPush } from "@/logger";
+import { generateUUID } from "@/utils/common";
+import { isValidStr, quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
+import { JSONStorage } from "@/utils/jsonStorageUtil";
 
 interface LightRAGConfig {
     baseUrl: string;
@@ -7,8 +11,14 @@ interface LightRAGConfig {
     mode: 'local' | 'global' | 'hybrid' | 'naive' | 'mix' | 'bypass';
 }
 
+interface LightRAGData {
+    idMap: Record<string, string>; // 本地 ID 到 LightRAG 文档 ID 的映射
+}
+
 export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
     private config: LightRAGConfig;
+    private storage: JSONStorage<LightRAGData> | null = null;
+    private retryCounts: Record<string, number> = {};
 
     static manifest: ServiceManifest = {
         id: 'lightRAG',
@@ -58,6 +68,9 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
 
     constructor() {
         this.config = { baseUrl: '', topK: 5, mode: 'mix' };
+        this.storage = new JSONStorage<LightRAGData>('lightRAG_storage.json', {
+            idMap: {}
+        });
     }
 
     async initialize(config: LightRAGConfig): Promise<void> {
@@ -118,17 +131,81 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         return await this.validateConfig(this.config);
     }
 
-    async upsert(chunks: VectorChunk[]): Promise<void> {
-        const filtered = chunks.filter(c => c.type === "doc" && quickCheckIsValidSiyuanId(c.id));
+    /**
+     * 处理单条数据的上传，包含冲突删除重试逻辑
+     */
+    async upsertSingle(content: string, sourceId: string): Promise<any> {
         const payload = {
-            texts: filtered.map(c => c.content),
-            file_sources: filtered.map(c => c.id || 'vite-plugin-note')
+            text: content,
+            file_source: sourceId
         };
 
-        await this.request('/documents/texts', {
+        let result = await this.request('/documents/text', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
+        // 重复条目先删除，然后重试一次
+        if (result["status"] === "duplicated") {
+            logPush(`ID ${sourceId} conflict detected, retrying after deletion...`);
+            await this.deleteDocuments([sourceId]);
+            
+            result = await this.request('/documents/text', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+        }
+        // 确认结果
+        if (result["status"] !== "success") {
+            this.retryCounts[sourceId] = this.retryCounts[sourceId] ? this.retryCounts[sourceId] + 1 : 1;
+            throw new UpsertError({
+                message: `Failed to upsert document with sourceId ${sourceId}: ${result["message"] || "Unknown error"}`,
+                ids: [sourceId],
+                retryable: result["status"] === "duplicated",
+                retryCount: this.retryCounts[sourceId]
+            });
+        }
+        const trackId = result["track_id"];
+        const trackStatus = await this.getTrackStatus(trackId);
+        if (trackStatus["documents"] && trackStatus["documents"].length !== 1) {
+            throw new Error(`Unexpected track status for trackId ${trackId}: expected 1 document, got ${trackStatus["documents"].length}`);
+        }
+
+        // WARN: 这里有潜在并发问题
+        if (this.storage) {
+            const data = await this.storage.get("idMap") || {};
+            data[sourceId] = trackStatus["documents"][0]["id"];
+            this.storage.set("idMap", data);
+        }
+        delete this.retryCounts[sourceId];
+        return result;
+    }
+
+    async getTrackStatus(trackId: string): Promise<any> {
+        const result = await this.request(`/documents/track_status/${trackId}`, {
+            method: 'GET'
+        });
+        return result;
+    }
+
+    async upsert(chunks: VectorChunk[]): Promise<void> {
+        const filtered = chunks.filter(c => 
+            c.type === "doc" && quickCheckIsValidSiyuanId(c.id)
+        );
+
+        for (const chunk of filtered) {
+            try {
+                const sourceId = chunk.id || 'random' + generateUUID();
+                // WARN: 这里暂时不能改成并发，upsertSingle缓存了id映射，但映射都是写入同一个文件，可能覆盖丢失
+                await this.upsertSingle(chunk.content, sourceId);
+            } catch (error) {
+                if (error instanceof UpsertError && error.retryable) {
+                    logPush(`Upsert failed for chunk ${chunk.id} with retryable error: ${error.message}. Retry count: ${error.retryCount}`);
+                } else {
+                    errorPush(`Error processing chunk ${chunk.id}:`, error);
+                }
+                throw error; // 上层会捕获并记录失败的文档
+            }
+        }
     }
 
     async query(text: string): Promise<QueryResult[]> {
@@ -167,10 +244,16 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
      * @param docIds 文档 ID 数组
      */
     async deleteDocuments(docIds: string[]): Promise<void> {
+        const idMap = await this.storage?.get("idMap") || {};
+        const lightRagDocIds = docIds.map(id => idMap[id]).filter(isValidStr);
+        if (lightRagDocIds.length === 0) {
+            logPush(`No valid LightRAG document IDs found for deletion, skipping.`);
+            return;
+        }
         await this.request('/documents/delete_document', {
             method: 'DELETE',
             body: JSON.stringify({
-                doc_ids: docIds,
+                doc_ids: lightRagDocIds,
                 delete_file: true,      // 同时删除输入目录下的物理文件
                 delete_llm_cache: true  // 清除该文档相关的 LLM 提取缓存
             })
@@ -190,13 +273,28 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
      * 获取索引状态，包括是否支持获取状态、失败的文档数量和原因、待处理的文档数量等信息
      */
     async getIndexStatus(): Promise<IndexStatus>{
-        return null;
+        const data = await this.request('/documents/status_counts', {
+            method: 'GET'
+        });
+        const statusCounts = data["status_counts"];
+        const pipelineStatus = await this.request("/documents/pipeline_status", {
+            method: "GET"
+        });
+        const failedReasons = isValidStr(pipelineStatus["latest_message"]) ? pipelineStatus["history_messages"] : [];
+        return {
+            isSupportGetStatus: true,
+            failedCount: statusCounts["FAILED"] || 0,
+            failedReasons: failedReasons,
+            pendingCount:  statusCounts["PENDING"] || 0
+        };
     }
 
     /**
      * 重新处理索引失败的文档，通常在用户修复了导致索引失败的问题后调用
      */
     async reprocessFailed(): Promise<void> {
-
+        await this.request("/documents/reprocess_failed", {
+            method: "POST"
+        });
     }
 }
