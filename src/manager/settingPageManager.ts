@@ -1,12 +1,11 @@
 import { showPluginMessage } from "@/utils/pluginCommon";
 import { TabProperty, ConfigProperty, loadAllConfigPropertyFromTabProperty } from "../utils/settings";
-import { indexAll } from "@/utils/indexerHelper";
+import { indexAll, useWorker } from "@/utils/indexerHelper";
+import { showValidationResultDialog } from "@/utils/wrappedDialog";
 
 let tabProperties: Array<TabProperty> = [
     
 ];
-
-
 /**
  * 设置项初始化
  * 应该在语言文件载入完成后调用执行
@@ -31,8 +30,12 @@ export function initSettingProperty() {
                 new ConfigProperty({ key: "lightRAG.baseUrl", type: "TEXT" }),
                 new ConfigProperty({ key: "lightRAG.apiKey", type: "TEXT" }),
                 new ConfigProperty({ key: "lightRAG.topK", type: "NUMBER" }),
-                new ConfigProperty({ key: "lightRAG.test", type: "BUTTON", btndo: ()=>{
-                    
+                new ConfigProperty({ key: "lightRAG.test", type: "BUTTON", btndo: async()=>{
+                    showPluginMessage("正在测试连接。");
+                    const worker = await useWorker();
+                    worker.checkHealth("lightRAG").then(result=>{
+                        showValidationResultDialog(result);
+                    });
                 }}),
             ]
         }),

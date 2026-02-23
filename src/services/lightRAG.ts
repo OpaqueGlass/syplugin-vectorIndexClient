@@ -1,3 +1,4 @@
+import { HealthStatus } from "@/constants";
 import { UpsertError } from "@/exceptions/upsertError";
 import { errorPush, logPush } from "@/logger";
 import { generateUUID } from "@/utils/common";
@@ -106,10 +107,9 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         return response.json();
     }
 
-    async validateConfig(config: LightRAGConfig): Promise<boolean> {
+    async validateConfig(config: LightRAGConfig): Promise<HealthCheckResult> {
         try {
             const url = `${config.baseUrl}/health`;
-            // 验证时也需要带上 Key
             const headers: Record<string, string> = {};
             if (config.apiKey) {
                 headers['X-API-Key'] = config.apiKey;
@@ -120,14 +120,63 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
                 headers,
                 signal: AbortSignal.timeout(5000) 
             });
+
+            if (!response.ok) {
+                return {
+                    available: false,
+                    connectivity: HealthStatus.UNREACHABLE,
+                    message: `Service unreachable (HTTP ${response.status})`
+                };
+            }
+            // health接口不处理鉴权错误，所以这里额外发一个请求来验证API Key的正确性
+            const authUrl = `${config.baseUrl}/documents/paginated`;
+            const authRes = await fetch(authUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    page: 1,
+                    page_size: 1, // 仅测试鉴权，最小化数据传输
+                    status_filter: "PROCESSED"
+                }),
+                signal: AbortSignal.timeout(5000)
+            });
+            if (authRes.status === 401 || authRes.status === 403) {
+                const data = await authRes.json();
+                return {
+                    available: false,
+                    connectivity: HealthStatus.API_KEY_ERROR,
+                    message: "鉴权失败：API密钥无效或不具有权限。" + data["detail"] 
+                };
+            }
+            
+            // 3. 处理成功的响应并检查业务逻辑状态
             const data = await response.json();
-            return response.ok && data.status === 'healthy';
-        } catch (e) {
-            return false;
+            const isHealthy = data.status === 'healthy';
+
+            return {
+                available: isHealthy,
+                connectivity: isHealthy ? HealthStatus.HEALTHY : HealthStatus.UNHEALTHY,
+                message: data["detail"] || (isHealthy ? 'Service is healthy' : 'Service reported unhealthy status')
+            };
+
+        } catch (e: any) {
+            let status = HealthStatus.UNKNOWN_ERROR;
+            let msg = e.message || String(e);
+
+            if (e.name === 'AbortError') {
+                status = HealthStatus.UNREACHABLE;
+                msg = "连接超时（>5秒）";
+            }
+
+            return {
+                available: false,
+                connectivity: status,
+                message: `请检查baseUrl配置是否正确: ${msg}`
+            };
         }
     }
 
-    async healthCheck(): Promise<boolean> {
+    async healthCheck(): Promise<HealthCheckResult> {
         return await this.validateConfig(this.config);
     }
 

@@ -35,7 +35,7 @@ import * as siyuan from "siyuan";
 import "@/index.scss";
 
 import { createApp } from "vue";
-import settingVue from "./components/settings/setting.vue";
+import settingVue from "./components/settings/settingCustomPage.vue";
 import { setLanguage } from "./utils/lang";
 import { commonPushCheck, debugPush, errorPush, logPush, setDebugLevel } from "./logger";
 import { initSettingProperty } from './manager/settingPageManager';

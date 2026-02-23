@@ -61,6 +61,11 @@
     "setting_lightRAG.apiKey_name": "API 密钥",
     "setting_lightRAG.apiKey_desp": "输入用于访问 lightRAG 服务的 API Key. 不存在请留空",
     "settingpage_lightRAG_name": "lightRAG",
+    "setting_lightRAG.topK_name": "topK",
+    "setting_lightRAG.topK_desp": "一次检索需要通过知识图谱要获取的实体/关系数量",
+    "setting_lightRAG.test_name": "测试连接",
+    "setting_lightRAG.test_desp": "测试与 lightRAG 服务的连接是否正常",
+    "setting_lightRAG.test_btn": "测试",
 
     "menu_indexSelectDoc": "索引文档",
     "menu_indexSelectDocWithSub": "索引文档及子文档",
@@ -85,5 +90,10 @@
     "copy_item": "复制",
     "source": "来源",
     "no_result": "没有找到相关内容",
-    "success:copy": "复制成功！"
+    "success:copy": "复制成功！",
+    "dialog_panel_testconnection": "连接测试结果",
+    "dialog_panel_testconnection_success": "连接成功",
+    "dialog_panel_testconnection_keyerror": "鉴权失败",
+    "dialog_panel_testconnection_unreachable": "无法访问",
+    "dialog_panel_testconnection_unknownerror": "未知错误"
 }

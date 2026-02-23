@@ -8,3 +8,11 @@ export class CONSTANTS {
 export class INDEXER_CONSTANTS {
     public static readonly LIGHTRAG: string = "lightRAG";
 }
+
+export enum HealthStatus {
+    HEALTHY = "healthy", // 连接，且正常
+    UNHEALTHY = "unhealthy", // 连接，但不正常
+    API_KEY_ERROR = "apiKeyError", // API 密钥错误
+    UNREACHABLE = "unreachable", // 无法连接
+    UNKNOWN_ERROR = "unknownError"
+}

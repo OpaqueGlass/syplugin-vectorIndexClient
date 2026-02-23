@@ -11,7 +11,7 @@ export default class EventHandler {
         "loaded-protyle-static": this.loadedProtyleRetryEntry.bind(this), // mutex需要访问EventHandler的属性
         "switch-protyle": this.loadedProtyleRetryEntry.bind(this),
         "ws-main": this.wsMainEntry.bind(this),
-        "open-menu-doctree": this.openMenuDocTreeHandler.bind(this)
+        "open-menu-doctree": this.openMenuDocTreeHandler.bind(this),
     };
     // 关联的设置项，如果设置项对应为true，则才执行绑定
     private relateGsettingKeyStr: Record<string, string> = {
@@ -36,7 +36,6 @@ export default class EventHandler {
                 plugin.eventBus.on(key, this.handlerBindList[key]);
             }
         }
-        
     }
 
     unbindHandler() {
@@ -88,12 +87,6 @@ export default class EventHandler {
                     showPluginMessage(lang("msg_pushToQueue"));
                 }
             });
-            // event.detail.menu.addItem({
-            //     "lable": "移除索引",
-            //     "click": (e)=>{
-
-            //     }
-            // })
         }
     }
 

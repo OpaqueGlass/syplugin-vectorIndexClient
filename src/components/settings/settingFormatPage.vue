@@ -1,3 +1,4 @@
+<!-- Use settingCustomPage.vue -->
 <template>
     <div class="fn__flex-1 fn__flex config__panel" style="width: auto; height: 100%; max-width: 1280px;">
         <ul class="b3-tab-bar b3-list b3-list--background">
@@ -79,10 +80,10 @@
 <script lang="ts" setup>
 import { ref, computed } from 'vue';
 import { settingLang, settingPageLang } from '@/utils/lang';
-import Page from './page.vue';
-import Column from './column.vue';
-import Block from "./block.vue";
-import Item from './item.vue';
+import Page from './layout/page.vue';
+import Column from './layout/column.vue';
+import Block from "./layout/block.vue";
+import Item from './layout/item.vue';
 import Button from './items/button.vue';
 import Switch from './items/switch.vue';
 import Input from './items/input.vue';

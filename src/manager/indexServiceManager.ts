@@ -20,8 +20,8 @@ export class VectorServiceManager {
         const allServices = Array.from(this.services.entries());
         const results = await Promise.all(
             allServices.map(async ([id, service]) => {
-                const isHealthy = await service.healthCheck();
-                return isHealthy ? id : null;
+                const healthCheckResult = await service.healthCheck();
+                return healthCheckResult.available ? id : null;
             })
         );
         return results.filter(id => id !== null);

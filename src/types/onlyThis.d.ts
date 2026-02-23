@@ -77,12 +77,12 @@ interface IVectorStoreService<TConfig = any> {
   /**
    * 验证配置是否有效 (例如测试 API 连通性)
    */
-  validateConfig(config: TConfig): Promise<boolean>;
+  validateConfig(config: TConfig): Promise<HealthCheckResult>;
 
   /**
    * 获取当前服务状态
    */
-  healthCheck(): Promise<boolean>;
+  healthCheck(): Promise<HealthCheckResult>;
 
   /**
    * 插入或更新向量数据
@@ -136,4 +136,10 @@ interface MultiServiceResponse {
     successCount: number;
     failCount: number;
     details: ServiceResult[];
+}
+
+interface HealthCheckResult {
+    available: boolean;
+    message?: string; // 可选的状态信息
+    connectivity: HealthStatus;
 }

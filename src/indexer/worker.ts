@@ -84,7 +84,10 @@ class VectorIndexer {
 
     async start(globalConfig?: any) {
 		debugPush("Worker starting");
-;		// TODO: 读取配置，初始化服务
+		if (globalConfig === null) {
+			globalConfig = this.g_setting_cache;
+		}
+		// TODO: 读取配置，初始化服务
 		const allPluginedIndexers = Object.values(INDEXER_CONSTANTS);
 		for (const indexerId of allPluginedIndexers) {
 			if (globalConfig && globalConfig[indexerId]) {
@@ -123,6 +126,14 @@ class VectorIndexer {
 
 	async getAllRegisteredServices() {
 		return await this.vectorManager.getRegisteredServicesIds();
+	}
+
+	async checkHealth(serviceId: string) {
+		const service = this.vectorManager.getServiceById(serviceId);
+		if (service) {
+			return await service.healthCheck();
+		}
+		return null;
 	}
 
 	getServiceQueryType(serviceId: string) {

@@ -72,7 +72,7 @@ export async function startWorkerOnce() {
     startOnceFlag = true;
     registerSettingUpdateCallback(async (newSettings) => {
         logPush("设置项变动，通知Worker重启");
-        await restartWorker();
+        await restartWorker(newSettings);
     });
 }
 export async function checkAndStart() {
@@ -83,7 +83,13 @@ export async function checkAndStart() {
 }
 
 export async function restartWorker(g_settings?: any) {
-    logPush("请求重启RAG Indexer后台worker");
+    logPush("请求重启RAG Indexer后台worker", g_settings);
+    if (g_settings == null) {
+        // 输出堆栈
+        const stack = new Error().stack;
+        debugPush("restartWorker调用堆栈", stack);
+        g_settings = getReadOnlyGSettings();
+    }
     let worker = await useWorker();
     await worker.restart(g_settings);
 }

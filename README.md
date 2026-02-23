@@ -2,7 +2,7 @@
 
 # Vector Retrieval Client Plugin
 
-> A plugin that provides vector retrieval capabilities for [SiYuan Note](https://github.com/siyuan-note/siyuan) (requires use with the [server-side component](https://github.com/OpaqueGlass/simple-rag-server)).
+> A plugin that provides vector retrieval capabilities for [SiYuan Note](https://github.com/siyuan-note/siyuan) (requires use with the backend server).
 
 > Under testing...  
 

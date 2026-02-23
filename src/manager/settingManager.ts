@@ -16,10 +16,23 @@ import { restartWorker } from "@/utils/indexerHelper";
 
 // const pluginInstance = getPluginInstance();
 
-let setting: any = ref({});
 interface IPluginSettings {
-    
-};
+    baseURL: string;
+    apiKey: string;
+    autoUpdate: boolean;
+    ignoreDocListStr: string;
+    ignoreDocList?: string[];
+    lightRAG: {
+        enabled: boolean;
+        baseURL: string;
+        apiKey: string;
+    };
+    filterMinChar: number;
+    "@version"?: number;
+    debugMode?: boolean;
+    [key: string]: any; // 兼容动态字段
+}
+
 let defaultSetting: IPluginSettings = {
     baseURL: "http://localhost:16809",
     apiKey: "",
@@ -33,7 +46,7 @@ let defaultSetting: IPluginSettings = {
     filterMinChar: 5,
 }
 
-
+const setting = ref<IPluginSettings>({ ...defaultSetting });
 
 let updateTimeout: any = null;
 
@@ -97,7 +110,7 @@ export async function loadSettings() {
     // 如果有必要，判断设置项是否对当前设备生效
     // TODO: 对于Order，switch需要进行检查，防止版本问题导致选项不存在，不存在的用默认值
     // TODO: switch旧版需要迁移，另外引出迁移逻辑
-    setting.value = Object.assign(defaultSetting, loadResult);
+    setting.value = Object.assign(Object.assign({}, defaultSetting), loadResult);
     logPush("载入设置项", setting.value);
     // return loadResult;
     watch(setting, (newVal) => {
@@ -112,26 +125,18 @@ export async function loadSettings() {
             debugPush("保存设置项", newVal);
             setStyle();
             changeDebug(newVal);
-            restartWorker(toRaw(newVal));
+            const rawNewVal = toRaw(newVal);
+            debugPush("触发设置项更新回调", rawNewVal);
             for (let callback of updateCallbackList) {
                 try {
-                    callback(newVal);
+                    callback(rawNewVal);
                 } catch(err) {
                     warnPush("设置项更新回调发生错误", err);
                 }
             }
             updateTimeout = null;
-        }, 1000);
+        }, 600);
     }, {deep: true, immediate: false});
-}
-
-function updateIgnoreDocList(newVal) {
-    if (isValidStr(newVal["ignoreDocListStr"])) {
-        let docList = newVal["ignoreDocListStr"].split("\n").map((item: string)=>item.trim()).filter((item: string)=>item!="");
-        setting.value["ignoreDocList"] = docList;
-    } else {
-        setting.value["ignoreDocList"] = [];
-    }
 }
 
 function checkOutdatedSettings(loadSetting) {
@@ -173,7 +178,7 @@ function changeDebug(newVal) {
             window.top["OpaqueGlassDebugV2"] = {};
         }
         window.top["OpaqueGlassDebugV2"][CONSTANTS.PLUGIN_SHORT_NAME] = 5;
-    } else if (newVal["debugMode"] === true) {
+    } else if (newVal["debugMode"] === false) {
         debugPush("调试模式已关闭");
         if (window.top["OpaqueGlassDebugV2"] && window.top["OpaqueGlassDebugV2"][CONSTANTS.PLUGIN_SHORT_NAME]) {
             delete window.top["OpaqueGlassDebugV2"][CONSTANTS.PLUGIN_SHORT_NAME];
@@ -219,7 +224,7 @@ export function getGSettings() {
 }
 
 export function getReadOnlyGSettings() {
-    return setting._rawValue;
+    return toRaw(setting.value);
 }
 
 export function getDefaultSettings() {
