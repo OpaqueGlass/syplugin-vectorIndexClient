@@ -44,6 +44,7 @@ class VectorIndexer {
     private readonly INTERVAL_MS = 10000;
 	private recentTaskInfo: any[] = [];
 	private g_setting_cache: any = null;
+	private isLeader: boolean = false;
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
 
@@ -142,6 +143,11 @@ class VectorIndexer {
 			return (service as any).getQueryType();
 		}
 		return null;
+	}
+
+	setLeaderFlag(isLeader: boolean) {
+		this.isLeader = isLeader;
+		this.cacheQueue.setWritable(isLeader);
 	}
 
 	async indexAll(notebookList: string[]) {

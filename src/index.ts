@@ -46,11 +46,13 @@ import { removeStyle, setStyle } from "./manager/setStyle";
 import { bindCommand } from "./manager/shortcutHandler";
 import { generateUUID } from "@/utils/common";
 import { startWorkerOnce, useWorker } from "./utils/indexerHelper";
+import { DistributedLeaderClient } from "./manager/distributeInstanceManager";
 
 const STORAGE_NAME = "menu-config";
 
 export default class OGVectorClientPlugin extends Plugin {
     private myEventHandler: EventHandler;
+    private distributeInstanceManager: DistributedLeaderClient;
 
     async onload() {
         this.data[STORAGE_NAME] = {readonlyText: "Readonly"};
@@ -60,6 +62,11 @@ export default class OGVectorClientPlugin extends Plugin {
         bindCommand(this);
         // 载入设置项，此项必须在setPluginInstance之后被调用
         this.myEventHandler = new EventHandler();
+        let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.distributeInstanceManager = new DistributedLeaderClient(`${wsProtocol}//${window.location.host}/ws/broadcast?channel=opaqueglassvectorclient`, async (isLeader)=>{
+            const worker = await useWorker();
+            await worker.setLeaderFlag(isLeader);
+        });
 	    // 示例：将得到的svg复制过来，将元素类型修改为symbol，然后设置一个id应该就行
         // this.addIcons(`<symbol id="ogiconCopyImage" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-images"><path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/></symbol>
         // <symbol id="ogiconSquareFunction" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-function"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3"/><path d="M9 11.2h5.7"/></symbol>
@@ -83,6 +90,7 @@ export default class OGVectorClientPlugin extends Plugin {
         this.myEventHandler.unbindHandler();
         // 移除所有已经插入的导航区
         removeStyle();
+        this.distributeInstanceManager.sendLeaveNotification();
     }
 
     openSetting() {

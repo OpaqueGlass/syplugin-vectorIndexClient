@@ -31,7 +31,8 @@ export class CacheQueue<T> {
 
     private lastPersistedState: string = JSON.stringify([]);
 
-    // 简化为单个锁，保护对内存队列和文件的所有访问
+    private writableFlag: boolean = false;
+
     private readonly lock = new AsyncLock();
 
     /**
@@ -174,7 +175,10 @@ export class CacheQueue<T> {
      * 这是一个线程安全的操作。
      */
     public async persist(): Promise<void> {
-        // 如果有正在等待的定时器，清除它，因为我们马上就要保存了
+        if (!this.writableFlag) {
+            debugPush("非写入模式，停止持久化");
+            return;
+        }
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
             this.saveTimer = null;
@@ -201,5 +205,9 @@ export class CacheQueue<T> {
             this.saveTimer = null;
         }
         await this.persist();
+    }
+
+    public setWritable(writable: boolean) {
+        this.writableFlag = writable;
     }
 }
