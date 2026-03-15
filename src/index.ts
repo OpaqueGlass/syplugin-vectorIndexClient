@@ -47,6 +47,7 @@ import { bindCommand } from "./manager/shortcutHandler";
 import { generateUUID } from "@/utils/common";
 import { startWorkerOnce, useWorker } from "./utils/indexerHelper";
 import { DistributedLeaderClient } from "./manager/distributeInstanceManager";
+import { bindApi2Window, unbindApi } from "./expose_api";
 
 const STORAGE_NAME = "menu-config";
 
@@ -79,6 +80,7 @@ export default class OGVectorClientPlugin extends Plugin {
             setStyle();
             setDebugLevel(commonPushCheck());
             startWorkerOnce();
+            bindApi2Window();
         }).catch((e)=>{
             showMessage("载入设置项失败。Load plugin settings faild. " + this.name);
             errorPush(e);
@@ -91,6 +93,16 @@ export default class OGVectorClientPlugin extends Plugin {
         // 移除所有已经插入的导航区
         removeStyle();
         this.distributeInstanceManager.sendLeaveNotification();
+        unbindApi();
+    }
+
+    async query(text: string, serviceId?: string) {
+        const worker = await useWorker();
+        return worker.query(text, serviceId);
+    }
+    async getAvailableServices() {
+        const worker = await useWorker();
+        return worker.getAvailableServices();
     }
 
     openSetting() {

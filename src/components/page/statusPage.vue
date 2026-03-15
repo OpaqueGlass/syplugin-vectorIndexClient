@@ -5,19 +5,19 @@
       <div class="status-grid">
         <div class="card">
           <p class="label">{{ lang('queueTotal') }}</p>
-          <p class="value">{{ queueStatus.totalSize }}</p>
+          <p class="value">{{ queueStatus?.totalSize }}</p>
         </div>
         
         <div class="card">
           <p class="label">{{ lang('queueAvailable') }}</p>
-          <p class="value">{{ queueStatus.availableSize }}</p>
+          <p class="value">{{ queueStatus?.availableSize }}</p>
         </div>
 
-        <div class="card status-card" :class="{ 'is-working': queueStatus.isWorking }">
+        <div class="card status-card" :class="{ 'is-working': queueStatus?.isWorking }">
           <div class="status-info">
             <p class="label">{{ lang('workingStatus') }}</p>
             <p class="status-text">
-              {{ queueStatus.isWorking ? lang('statusRunning') : lang('statusIdle') }}
+              {{ queueStatus?.isWorking ? lang('statusRunning') : lang('statusIdle') }}
             </p>
           </div>
           <div class="status-indicator"></div>
