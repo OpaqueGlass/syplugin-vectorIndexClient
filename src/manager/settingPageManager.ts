@@ -2,6 +2,12 @@ import { showPluginMessage } from "@/utils/pluginCommon";
 import { TabProperty, ConfigProperty, loadAllConfigPropertyFromTabProperty } from "../utils/settings";
 import { indexAll, useWorker } from "@/utils/indexerHelper";
 import { showValidationResultDialog } from "@/utils/wrappedDialog";
+import { createApp } from "vue";
+import { generateUUID } from "@/utils/common";
+import StatusPage from "@/components/page/statusPage.vue";
+import { isMobile } from "@/syapi/ui";
+import { Dialog } from "siyuan";
+import { lang } from "@/utils/lang";
 
 let tabProperties: Array<TabProperty> = [
     
@@ -19,7 +25,6 @@ export function initSettingProperty() {
                     indexAll();
                     showPluginMessage("已创建后台任务")} 
                 }),
-                new ConfigProperty({ key: "filterMinChar", type: "NUMBER" }),
                 new ConfigProperty({ key: "ignoreDocListStr", type: "TEXTAREA" }),
             ]
         }),
@@ -42,6 +47,23 @@ export function initSettingProperty() {
         new TabProperty({
             key: "about", iconKey: "iconTheme", props: [
                 new ConfigProperty({ key: "aboutTip", type: "TIPS" }),
+                new ConfigProperty({ key: "statusPage", type: "BUTTON", btndo: async()=>{
+                    // 生成Dialog内容
+                    const uid = generateUUID();
+                    // 创建dialog
+                    const app = createApp(StatusPage);
+                    const settingDialog = new Dialog({
+                        "title": lang("setting_panel_title"),
+                        "content": `
+                        <div id="og_plugintemplate_${uid}" style="overflow: hidden; position: relative;height: 100%;"></div>
+                        `,
+                        "width": isMobile() ? "92vw":"1040px",
+                        "height": isMobile() ? "50vw":"80vh",
+                        "destroyCallback": ()=>{app.unmount(); },
+                    });
+                    app.mount(settingDialog.element.querySelector(`#og_plugintemplate_${uid}`) as HTMLElement);
+                    // app.mount(`#og_plugintemplate_${uid}`);
+                }}),
             ]
         }),
     );

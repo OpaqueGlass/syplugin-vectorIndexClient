@@ -1,38 +1,35 @@
 import { debugPush } from "@/logger";
 import { getJSONFile, putJSONFile } from "@/syapi";
 
-// 这是一个简化的锁实现，用于防止异步函数重入。
-// 在单线程的JS环境中，它通过一个Promise队列来确保操作按顺序执行。
 class AsyncLock {
     private promise = Promise.resolve();
-
     public async acquire<T>(fn: () => Promise<T>): Promise<T> {
         return new Promise((resolve, reject) => {
             this.promise = this.promise
                 .then(() => fn().then(resolve, reject))
-                .catch(() => { }); // 捕获之前的错误，不影响新任务
+                .catch(() => { });
         });
     }
 }
 
+// 定义包装类型
+interface QueueItem<T> {
+    data: T;
+    availableAt: number; // 毫秒时间戳
+}
+
 export class CacheQueue<T> {
     private readonly cacheDir: string;
-    // 简化为单个缓存文件
     private readonly cacheFilePath: string;
+    
+    // 队列现在存储包装后的对象
+    private queue: QueueItem<T>[] = [];
 
-    // 使用一个统一的内存队列作为主要数据源，替代原有的 readCache
-    private queue: T[] = [];
-
-    // 用于定时存盘的计时器
     private saveTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly saveInterval: number;
-
     private readonly idSelector?: (item: T) => any;
-
     private lastPersistedState: string = JSON.stringify([]);
-
     private writableFlag: boolean = false;
-
     private readonly lock = new AsyncLock();
 
     /**
@@ -44,7 +41,6 @@ export class CacheQueue<T> {
         this.cacheDir = cacheDir;
         this.idSelector = idSelector;
         this.saveInterval = saveInterval;
-        // 使用单个缓存文件
         this.cacheFilePath = `${this.cacheDir}/cache.json`;
     }
 
@@ -58,7 +54,6 @@ export class CacheQueue<T> {
             if (Array.isArray(data)) {
                 this.queue = data;
             } else {
-                // 如果文件不存在或内容无效，则创建一个空文件
                 await putJSONFile(this.cacheFilePath, [], false);
                 this.queue = [];
             }
@@ -66,14 +61,26 @@ export class CacheQueue<T> {
     }
 
     /**
-     * 检查队列是否有待处理的项目。
+     * 只有当前时间超过了 availableAt 的项才算作“有下一条”
      */
     public hasNext(): boolean {
-        return this.queue.length > 0;
+        const now = Date.now();
+        return this.queue.some(q => q.availableAt <= now);
     }
 
-    public size(): number {
+    /**
+     * 返回所有项的数量（包含还在冷却中的）
+     */
+    public totalSize(): number {
         return this.queue.length;
+    }
+
+    /**
+     * 返回当前可用的项的数量
+     */
+    public availableSize(): number {
+        const now = Date.now();
+        return this.queue.filter(q => q.availableAt <= now).length;
     }
 
     /**
@@ -82,51 +89,56 @@ export class CacheQueue<T> {
      * 此操作仅修改内存，并通过定时任务自动存盘。
      * @param item 要添加的项目。
      */
-    public async addToQueue(item: T): Promise<void> {
-        debugPush("item added to queue", item);
+    public async addToQueue(item: T, delayMs: number = 0): Promise<void> {
+        const availableAt = Date.now() + delayMs;
+        debugPush("item added to queue with delay", { item, delayMs });
+
         await this.lock.acquire(async () => {
-            const existingIndex = this.findIndexInQueue(this.queue, item);
+            const existingIndex = this.findIndexInQueue(item);
             if (existingIndex !== -1) {
+                // 如果存在，移除旧的（实现“更新”逻辑）
                 this.queue.splice(existingIndex, 1);
             }
-            this.queue.push(item);
+            this.queue.push({ data: item, availableAt });
         });
-        // 不再直接写入文件，而是安排一个定时保存任务
         this.scheduleSave();
     }
 
-    /**
-     * 批量将新项目添加到队列中。
-     * 对于每个项目，如果队列中已存在相同的项目，则会将其移动到队尾。
-     * 此操作在完成后会立即触发一次存盘。
-     * @param items 要添加的项目数组。
-     */
-    public async batchAddToQueue(items: T[]): Promise<void> {
+    public async batchAddToQueue(items: { data: T, delayMs?: number }[]): Promise<void> {
+        const now = Date.now();
         await this.lock.acquire(async () => {
-            for (const item of items) {
-                const existingIndex = this.findIndexInQueue(this.queue, item);
+            for (const entry of items) {
+                const availableAt = now + (entry.delayMs || 0);
+                const existingIndex = this.findIndexInQueue(entry.data);
                 if (existingIndex !== -1) {
                     this.queue.splice(existingIndex, 1);
                 }
-                this.queue.push(item);
+                this.queue.push({ data: entry.data, availableAt });
             }
         });
-        // 批量操作后，立即执行存盘
         await this.persist();
     }
 
-    /**
-     * 内部辅助方法，根据是否提供了 idSelector 来查找项目在队列中的索引。
-     * @param queue 要搜索的队列。
-     * @param item 要查找的项目。
-     * @returns 项目的索引，如果未找到则返回 -1。
-     */
-    private findIndexInQueue(queue: T[], item: T): number {
+    public async batchAddToQueueWithDelay(items: T[], delayMs?: number): Promise<void> {
+        const now = Date.now();
+        await this.lock.acquire(async () => {
+            for (const entry of items) {
+                const availableAt = now + (delayMs || 0);
+                const existingIndex = this.findIndexInQueue(entry);
+                if (existingIndex !== -1) {
+                    this.queue.splice(existingIndex, 1);
+                }
+                this.queue.push({ data: entry, availableAt });
+            }
+        });
+        await this.persist();
+    }
+    private findIndexInQueue(item: T): number {
         if (this.idSelector) {
             const itemId = this.idSelector(item);
-            return queue.findIndex(i => this.idSelector!(i) === itemId);
+            return this.queue.findIndex(q => this.idSelector!(q.data) === itemId);
         }
-        return queue.indexOf(item);
+        return this.queue.findIndex(q => q.data === item);
     }
 
     /**
@@ -136,20 +148,35 @@ export class CacheQueue<T> {
      * @returns 一个包含已消费项目的数组。
      */
     public async consume(count: number): Promise<T[]> {
-        let consumedItems: T[] = [];
+        let consumedData: T[] = [];
+        const now = Date.now();
+
         await this.lock.acquire(async () => {
-            const consumedCount = Math.min(count, this.queue.length);
-            if (consumedCount > 0) {
-                consumedItems = this.queue.splice(0, consumedCount);
+            // 找出所有已到时间的项的索引
+            const availableIndices: number[] = [];
+            for (let i = 0; i < this.queue.length; i++) {
+                if (this.queue[i].availableAt <= now) {
+                    availableIndices.push(i);
+                    if (availableIndices.length === count) break;
+                }
+            }
+
+            if (availableIndices.length > 0) {
+                // 从后往前删，避免索引偏移问题
+                const items: QueueItem<T>[] = [];
+                for (let i = availableIndices.length - 1; i >= 0; i--) {
+                    const [removed] = this.queue.splice(availableIndices[i], 1);
+                    items.unshift(removed);
+                }
+                consumedData = items.map(q => q.data);
             }
         });
 
-        if (consumedItems.length > 0) {
-            // 消费后，安排定时保存
+        if (consumedData.length > 0) {
             this.scheduleSave();
         }
 
-        return consumedItems;
+        return consumedData;
     }
 
     /**
@@ -160,7 +187,6 @@ export class CacheQueue<T> {
         return items.length > 0 ? items[0] : null;
     }
 
-    // 安排一个延迟的存盘操作 (debounce)
     private scheduleSave(): void {
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
@@ -170,10 +196,6 @@ export class CacheQueue<T> {
         }, this.saveInterval);
     }
 
-    /**
-     * 将当前内存队列的状态持久化到磁盘文件。
-     * 这是一个线程安全的操作。
-     */
     public async persist(): Promise<void> {
         if (!this.writableFlag) {
             debugPush("非写入模式，停止持久化");
@@ -187,9 +209,8 @@ export class CacheQueue<T> {
         await this.lock.acquire(async () => {
             const currentState = JSON.stringify(this.queue);
             if (currentState !== this.lastPersistedState) {
-                // 只有当队列内容发生变化时才写入文件
                 await putJSONFile(this.cacheFilePath, this.queue, false);
-                this.lastPersistedState = currentState; // 更新快照
+                this.lastPersistedState = currentState;
             }
         });
     }
@@ -199,7 +220,6 @@ export class CacheQueue<T> {
      * 清理定时器并确保队列的状态被持久化。
      */
     public async stop(): Promise<void> {
-        // 清理定时器
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
             this.saveTimer = null;

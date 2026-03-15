@@ -66,6 +66,9 @@
     "setting_lightRAG.test_name": "测试连接",
     "setting_lightRAG.test_desp": "测试与 lightRAG 服务的连接是否正常",
     "setting_lightRAG.test_btn": "测试",
+    "setting_statusPage_name": "状态页面",
+    "setting_statusPage_desp": "查看插件运行状态",
+    "setting_statusPage_btn": "打开状态页面",
 
     "menu_indexSelectDoc": "索引文档",
     "menu_indexSelectDocWithSub": "索引文档及子文档",
@@ -95,5 +98,18 @@
     "dialog_panel_testconnection_success": "连接成功",
     "dialog_panel_testconnection_keyerror": "鉴权失败",
     "dialog_panel_testconnection_unreachable": "无法访问",
-    "dialog_panel_testconnection_unknownerror": "未知错误"
+    "dialog_panel_testconnection_unknownerror": "未知错误",
+
+    "statusTitle": "系统状态概览",
+    "queueTotal": "待处理总数",
+    "queueAvailable": "非延迟任务数量",
+    "workingStatus": "当前工作状态",
+    "statusRunning": "正在处理中",
+    "statusIdle": "空闲等待",
+    "errorLogTitle": "异常信息列表",
+    "errorCountUnit": "条错误记录",
+    "tableDocId": "文档标识",
+    "tableErrorMsg": "错误描述",
+    "tableTime": "发生时间",
+    "noErrors": "运行状况良好，暂无异常信息"
 }

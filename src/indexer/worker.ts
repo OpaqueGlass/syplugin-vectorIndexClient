@@ -12,7 +12,7 @@ import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
 import { sleep } from "@/utils/common";
-import { INDEXER_CONSTANTS } from "@/constants";
+import { CONSTANTS, INDEXER_CONSTANTS } from "@/constants";
 import { LightRAGService } from "@/services/lightRAG";
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
@@ -182,7 +182,7 @@ class VectorIndexer {
 			const chunks: VectorChunk[] = [];
 			// TODO: 考虑一下文档的子块要怎么定义
 			if (dbItem["type"] === "d") {
-				if (content["content"]?.length > this.g_setting_cache["filterMinChar"]) {
+				if (content["content"]?.length > CONSTANTS.FILTER_MIN_CHAR) {
 					chunks.push({
 						id: docId,
 						type: "doc",
@@ -196,7 +196,7 @@ class VectorIndexer {
 				const queryResponse = await queryAPI(`SELECT * FROM blocks WHERE root_id = '${docId}' and type in ('p', 't', 'i')`) ?? [];
 				for (const block of queryResponse) {
 					block["markdown"] = block["markdown"]?.trim();
-					if (block["markdown"]?.length > this.g_setting_cache["filterMinChar"]) {
+					if (block["markdown"]?.length > CONSTANTS.FILTER_MIN_CHAR) {
 						chunks.push({
 							id: block["id"],
 							parentId: docId,
@@ -244,13 +244,13 @@ class VectorIndexer {
 		return true;
 	}
 
-	async pushToQueueAndStart(ids: string | string[]) {
+	async pushToQueueAndStart(ids: string | string[], delayMs?: number) {
 		logPush("Adding to index queue:", ids);
 		console.log("Adding to index queue:", ids);
 		if (Array.isArray(ids)) {
-			await this.cacheQueue.batchAddToQueue(ids);
+			await this.cacheQueue.batchAddToQueueWithDelay(ids, delayMs);
 		} else {
-			await this.cacheQueue.addToQueue(ids);
+			await this.cacheQueue.addToQueue(ids, delayMs);
 		}
 		this.startCycle();
 	}
@@ -269,10 +269,11 @@ class VectorIndexer {
     }
 
     getQueueStatus() {
-        return {
-            isWorking: this.working,
-            pendingCount: this.cacheQueue.size()
-        };
+		return {
+			"totalSize": this.cacheQueue.totalSize(),
+			"availableSize": this.cacheQueue.availableSize(),
+			"isWorking": this.working,
+		};
     }
 	startCycle() {
 		if (this.intervalFlag || !this.vectorManager) {
@@ -297,7 +298,7 @@ class VectorIndexer {
 						let docId = await this.cacheQueue.consumeOne();
 						let result = await this.processDocument(docId);
 						if (result === false) {
-							await this.cacheQueue.addToQueue(docId);
+							await this.cacheQueue.addToQueue(docId, 10000);
 							await sleep(10000);
 							break; // 遇到错误建议跳出本次 while，等待下一轮
 						}

@@ -15,6 +15,10 @@
     "setting_column_none_name": "No column",
     "setting_aboutTip_name": "About this plugin",
     "setting_aboutTip_desp": "This plugin provides vector search capabilities.",
+    "setting_statusPage_name": "Status Page",
+    "setting_statusPage_desp": "View the plugin's runtime status",
+    "setting_statusPage_btn": "Open Status Page",
+
     "dialog_panel_plugin_name": "Vector Search Panel",
     "dialog_panel_search": "Search",
     "search_placeholder": "Enter keywords...",
@@ -24,5 +28,17 @@
     "dialog_panel_switchDoc_click": "Click",
     "open_item": "Open",
     "copy_item": "Copy",
-    "success:copy": "Copied successfully!"
+    "success:copy": "Copied successfully!",
+    "statusTitle": "System Status Overview",
+    "queueTotal": "Total in Queue",
+    "queueAvailable": "Non-delayed Tasks",
+    "workingStatus": "Worker Status",
+    "statusRunning": "Processing",
+    "statusIdle": "Idle",
+    "errorLogTitle": "Error Logs",
+    "errorCountUnit": "error entries",
+    "tableDocId": "Doc ID",
+    "tableErrorMsg": "Description",
+    "tableTime": "Timestamp",
+    "noErrors": "System is healthy, no error logs found"
 }
