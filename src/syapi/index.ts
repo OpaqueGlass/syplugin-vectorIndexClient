@@ -710,6 +710,18 @@ export async function listDocTree(notebook:string, path:string) {
     }
 }
 
+export async function getChildBlocks(id: string): Promise<ChildBlockResponse[]> {
+    const url = "/api/block/getChildBlocks";
+    let postBody = {
+        id
+    }
+    let response = await postRequest(postBody, url);
+    if (response.code == 0) {
+        return response.data;
+    }
+    throw new Error("getChildBlocks Failed: " + response.msg);
+}
+
 export const DOC_SORT_TYPES = {
     FILE_NAME_ASC: 0,
     FILE_NAME_DESC: 1,

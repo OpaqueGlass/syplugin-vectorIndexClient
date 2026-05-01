@@ -26,9 +26,14 @@ export default defineConfig({
     resolve: {
         alias: {
             "@": resolve(__dirname, "src"),
+        },
+        extensions: [".ts", ".js", ".vue", ".json", ".mjs"],
+    },
+    worker: {
+        rollupOptions: {
+            external: ["@chroma-core/default-embed"],
         }
     },
-
     plugins: [
         vue(),
         viteStaticCopy({
@@ -126,7 +131,7 @@ export default defineConfig({
 
             // make sure to externalize deps that shouldn't be bundled
             // into your library
-            external: ["siyuan", "process"],
+            external: ["siyuan", "process", "@chroma-core/default-embed"],
 
             output: {
                 entryFileNames: "[name].js",

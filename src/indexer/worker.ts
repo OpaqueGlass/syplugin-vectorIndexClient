@@ -12,8 +12,13 @@ import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
 import { sleep } from "@/utils/common";
-import { CONSTANTS, INDEXER_CONSTANTS } from "@/constants";
+import { CONSTANTS, HealthStatus, INDEXER_CONSTANTS } from "@/constants";
 import { LightRAGService } from "@/services/lightRAG";
+import { ChromaClient } from "chromadb";
+// TODO: 下面这个导入有问题，排查一下是否引入了不能使用的玩意
+import { AIClientFactory} from "@/ai_client/factory";
+import { IChatClient, IEmbeddingClient, IRerankClient } from "@/ai_client";
+
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 
@@ -45,6 +50,7 @@ class VectorIndexer {
 	private recentTaskInfo: any[] = [];
 	private g_setting_cache: any = null;
 	private isLeader: boolean = false;
+	private aiClientDict: AiClientDict = {"chat": null, "embedding": null, "rerank": null}; 
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
 
@@ -88,7 +94,13 @@ class VectorIndexer {
 		if (globalConfig === null) {
 			globalConfig = this.g_setting_cache;
 		}
-		// TODO: 读取配置，初始化服务
+		// 初始化模型：
+		for (let key of Object.keys(this.aiClientDict)) {
+			const modelConfig = globalConfig[key + "Model"];
+			this.aiClientDict[key] = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+		}
+		
+		// 读取配置，初始化服务
 		const allPluginedIndexers = Object.values(INDEXER_CONSTANTS);
 		for (const indexerId of allPluginedIndexers) {
 			if (globalConfig && globalConfig[indexerId]) {
@@ -135,6 +147,33 @@ class VectorIndexer {
 			return await service.healthCheck();
 		}
 		return null;
+	}
+
+	async checkModelHealth(modelType: "embedding"|"chat"|"rerank", modelConfig: ModelConfig) {
+		let testModel: IChatClient|IRerankClient|IEmbeddingClient|null = null;
+		try {
+			if (modelConfig == null) {
+				testModel = this.aiClientDict[modelType];
+			} else {
+				switch (modelType) {
+					case "chat":
+						testModel = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						break;
+					case "embedding":
+						testModel = AIClientFactory.getEmbeddingClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						break;
+					case "rerank":
+						testModel = AIClientFactory.getRerankClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						break;
+				}
+			}
+			if (testModel == null) {
+				return { available: false, message: "Unsupported model type or missing configuration", connectivity: HealthStatus.UNKNOWN_ERROR };
+			}
+			return await testModel.checkConnection();
+		} catch (err) {
+			return {availalbe: false, message: err.message || "Connection test failed with an unknown error", connectivity: HealthStatus.UNKNOWN_ERROR };
+		}
 	}
 
 	getServiceQueryType(serviceId: string) {

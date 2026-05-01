@@ -43,7 +43,7 @@
                                         @update:model-value="val=>setValueByPath(g_setting, item.key, val)"></Input>
                                     </template>
                                     <template v-else-if="item.type == 'BUTTON'">
-                                        <Button :btn-name="settingLang(item.key)[2]" :btndo="item.btndo"></Button>
+                                        <Button :btn-name="settingLang(item.key)[2]" :btndo="item.btndo" :setting-key="item.key"></Button>
                                     </template>
                                     
                                     <template v-else>

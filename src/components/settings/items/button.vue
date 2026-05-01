@@ -7,9 +7,12 @@
     </button>
 </template>
 <script lang="ts" setup>
+import { handleSettionBtnAction } from '@/manager/settingAction';
+
 const props = defineProps<{
     btnName: string,
-    btndo: () => void
+    btndo: () => void,
+    settingKey: string,
 }>();
 
 let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -20,7 +23,11 @@ const handleClick = () => {
     }
 
     timeout = setTimeout(() => {
-        props.btndo();
+        if (props.btndo) {
+            props.btndo();
+        } else {
+            handleSettionBtnAction(props.settingKey);
+        }
         timeout = null; 
     }, 900);
 };

@@ -143,3 +143,15 @@ interface HealthCheckResult {
     message?: string; // 可选的状态信息
     connectivity: HealthStatus;
 }
+
+interface AiClientDict {
+  "chat": IChatClient,
+  "embedding": IEmbeddingClient,
+  "rerank": IRerankClient
+}
+
+interface ModelConfig {
+  modelType: string;
+  baseUrl: string;
+  apiKey?: string;
+}

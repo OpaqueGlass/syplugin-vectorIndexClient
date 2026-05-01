@@ -45,6 +45,39 @@ export function initSettingProperty() {
             ]
         }),
         new TabProperty({
+            key: "chroma", iconKey: "iconTheme", props: [
+                new ConfigProperty({ key: "aboutChroma", type: "TIPS" }),
+                new ConfigProperty({ key: "chroma.enabled", type: "SWITCH" }),
+                new ConfigProperty({ key: "chroma.baseUrl", type: "TEXT" }),
+                new ConfigProperty({ key: "chroma.header", type: "TEXTAREA" }),
+            ]
+        }),
+        new TabProperty({
+            key: "model", iconKey: "iconModel", props: {
+                "chatModel": [
+                    new ConfigProperty({ key: "chatModel.modelType", type: "SELECT", options: ["oai"] }),
+                    new ConfigProperty({ key: "chatModel.baseUrl", type: "TEXT" }),
+                    new ConfigProperty({ key: "chatModel.apiKey", type: "TEXT" }),
+                    new ConfigProperty({ key: "chatModel.modelName", type: "TEXT" }),
+                    new ConfigProperty({ key: "chatModel.test", type: "BUTTON"}),
+                ],
+                "embeddingModel": [
+                    new ConfigProperty({ key: "embeddingModel.modelType", type: "SELECT", options: ["oai"] }),
+                    new ConfigProperty({ key: "embeddingModel.baseUrl", type: "TEXT" }),
+                    new ConfigProperty({ key: "embeddingModel.apiKey", type: "TEXT" }),
+                    new ConfigProperty({ key: "embeddingModel.modelName", type: "TEXT" }),
+                    new ConfigProperty({ key: "embeddingModel.test", type: "BUTTON"}),
+                ],
+                "rerankModel": [
+                    new ConfigProperty({ key: "rerankModel.modelType", type: "SELECT", options: ["cohere", "qwen"] }),
+                    new ConfigProperty({ key: "rerankModel.baseUrl", type: "TEXT" }),
+                    new ConfigProperty({ key: "rerankModel.apiKey", type: "TEXT" }),
+                    new ConfigProperty({ key: "rerankModel.modelName", type: "TEXT" }),
+                    new ConfigProperty({ key: "rerankModel.test", type: "BUTTON"}),
+                ],
+            },
+        }),
+        new TabProperty({
             key: "about", iconKey: "iconTheme", props: [
                 new ConfigProperty({ key: "aboutTip", type: "TIPS" }),
                 new ConfigProperty({ key: "statusPage", type: "BUTTON", btndo: async()=>{

@@ -37,7 +37,7 @@ import "@/index.scss";
 import { createApp } from "vue";
 import settingVue from "./components/settings/settingCustomPage.vue";
 import { setLanguage } from "./utils/lang";
-import { commonPushCheck, debugPush, errorPush, logPush, setDebugLevel } from "./logger";
+import { commonPushCheck, debugPush, errorPush, logPush, setDebugLevel, warnPush } from "./logger";
 import { initSettingProperty } from './manager/settingPageManager';
 import { setPluginInstance } from "./utils/pluginHelper";
 import { loadSettings } from "./manager/settingManager";
@@ -48,6 +48,9 @@ import { generateUUID } from "@/utils/common";
 import { startWorkerOnce, useWorker } from "./utils/indexerHelper";
 import { DistributedLeaderClient } from "./manager/distributeInstanceManager";
 import { bindApi2Window, unbindApi } from "./expose_api";
+import OpenAI from 'openai';
+import { ChromaClient } from "chromadb";
+
 
 const STORAGE_NAME = "menu-config";
 

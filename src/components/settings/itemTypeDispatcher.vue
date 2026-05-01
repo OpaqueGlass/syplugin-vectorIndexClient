@@ -39,6 +39,7 @@
       v-else-if="item.type === 'BUTTON'" 
       :btn-name="settingLang(item.key)[2]" 
       :btndo="item.btndo" 
+      :setting-key="item.key"
     />
 
     <Textarea 

@@ -65,6 +65,14 @@ type doOperation = {
     retData: null;
 }
 
+interface ChildBlockResponse {
+    id: string;
+    type: string;
+    subType?: string;
+    content?: string;
+    markdown?: string;
+}
+
 /**
  * By OpaqueGlass. Copy from https://github.com/siyuan-note/siyuan/blob/master/app/src/types/index.d.ts
  */
