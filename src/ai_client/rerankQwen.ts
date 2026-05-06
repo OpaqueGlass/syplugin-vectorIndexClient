@@ -1,4 +1,6 @@
 import { BaseAIClient, IRerankClient, RerankCreateParams, RequestOptions } from "@/ai_client/index";
+import { HealthStatus } from "@/constants";
+import { debugPush, logPush } from "@/logger";
 import { isValidStr } from "@/utils/commonCheck";
 
 export class QwenRerankClient extends BaseAIClient implements IRerankClient {
@@ -68,5 +70,38 @@ export class QwenRerankClient extends BaseAIClient implements IRerankClient {
 
     get supportsCustomHeaders(): boolean {
         return true;
+    }
+
+    async checkConnection(args: CheckConnectionArgs): Promise<HealthCheckResult> {
+        const { modelName } = args;
+        try {
+            const result = await this.rerank({
+                "model": modelName,
+                "documents": ["Bonjor", "Hello", "你好"],
+                "query": "“你好”用英文怎么说？",
+                "top_n": 2
+            });
+            debugPush("checkConnection Result", result);
+            if (result) {
+                return {
+                    available: true,
+                    connectivity: HealthStatus.HEALTHY,
+                    message: "Service Operation Normally. Test Response: " + result,
+                }
+            } else {
+                return {
+                    available: false,
+                    connectivity: HealthStatus.UNHEALTHY,
+                    message: "Connection check failed, no valid response received."
+                }
+            }
+        } catch (err) {
+            logPush("checkConnection Error", err);
+            return {
+                available: false,
+                message: `Connection check failed: ${err instanceof Error ? err.message : String(err)}`,
+                connectivity: HealthStatus.UNREACHABLE
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 import { errorPush, isDebugMode } from "@/logger";
 
 let language = null;
-let emptyLanguageKey: Array<string> = [];
+let emptyLanguageKey: Set<string> = new Set();
 
 export function setLanguage(lang:any) {
     language = lang;
@@ -12,9 +12,9 @@ export function lang(key: string) {
         return language[key];
     }
     if (language == null || language[key] == null) {
-        emptyLanguageKey.push(key);
+        emptyLanguageKey.add(key);
         if (isDebugMode()) {
-            console.error("语言文件未定义该Key", JSON.stringify(emptyLanguageKey));
+            console.error("语言文件未定义该Key", JSON.stringify([...emptyLanguageKey]));
         }
     }
     return key;

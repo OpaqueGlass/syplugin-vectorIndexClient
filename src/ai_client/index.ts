@@ -3,19 +3,19 @@ import { HealthStatus } from "@/constants";
 
 // --- 基础类型定义 ---
 
-interface SimpleMessage {
+export interface SimpleMessage {
     role: "user" | "assistant" | "system";
     content: string;
     type?: string;
 }
 
-interface RequestOptions {
+export interface RequestOptions {
     timeout?: number;
     headers?: Record<string, string>;
     signal?: AbortSignal;
 }
 
-interface ChatCreateParams {
+export interface ChatCreateParams {
     model: string;
     messages: SimpleMessage[];
     temperature?: number;
@@ -24,14 +24,14 @@ interface ChatCreateParams {
     [key: string]: any; // 允许透传供应商特定参数
 }
 
-interface EmbeddingCreateParams {
+export interface EmbeddingCreateParams {
     model: string;
     input: string | string[];
     dimensions?: number;
     user?: string;
 }
 
-interface RerankCreateParams {
+export interface RerankCreateParams {
     model: string;
     query: string;
     documents: string[];
@@ -43,7 +43,7 @@ export interface IBaseClient {
     readonly apiKey?: string;
     readonly supportsCustomHeaders: boolean;
     setHeaders(headers: Record<string, string>): void;
-    checkConnection(): Promise<HealthCheckResult>;
+    checkConnection(args: CheckConnectionArgs): Promise<HealthCheckResult>;
 }
 
 export interface IChatClient extends IBaseClient {
@@ -79,7 +79,7 @@ export abstract class BaseAIClient implements IBaseClient {
         }
         this.headers = { ...this.headers, ...headers };
     }
-    async checkConnection(): Promise<HealthCheckResult> {
+    async checkConnection(args: CheckConnectionArgs): Promise<HealthCheckResult> {
         return { available: false, message: "checkConnection not implemented", connectivity: HealthStatus.UNKNOWN_ERROR };
     }
 }

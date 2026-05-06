@@ -1,6 +1,7 @@
 import { HealthStatus } from "@/constants";
 import { Dialog } from "siyuan";
 import { lang } from "./lang";
+import { escapeHtml } from "./escape";
 
 /**
  * 显示配置验证结果的对话框
@@ -11,6 +12,11 @@ export function showValidationResultDialog(result: HealthCheckResult) {
             title: lang("dialog_panel_testconnection_success"),
             icon: "✅",
             color: "var(--b3-theme-success)",
+        },
+        [HealthStatus.UNHEALTHY]: {
+            title: lang("dialog_panel_testconnection_unhealthy"),
+            icon: "🫥",
+            color: "var(--b3-theme-warning)",
         },
         [HealthStatus.API_KEY_ERROR]: {
             title: lang("dialog_panel_testconnection_keyerror"),
@@ -35,8 +41,8 @@ export function showValidationResultDialog(result: HealthCheckResult) {
         <div style="padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
             <div style="font-size: 48px;">${ui.icon}</div>
             <div style="font-size: 18px; font-weight: bold; color: ${ui.color};">${ui.title}</div>
-            <div style="background: var(--b3-theme-surface); padding: 8px; border-radius: 4px; width: 100%; font-family: monospace; font-size: 12px; word-break: break-all;">
-                ${result.message}
+            <div style="background: var(--b3-theme-surface); padding: 8px; border-radius: 4px; width: 100%; font-family: monospace; font-size: 12px; word-break: break-all; max-height: 15vh; overflow: auto;">
+                ${escapeHtml(result.message)}
             </div>
             <button class="b3-button" style="margin-top: 8px; width: 100px;" id="ogcloseDialog">确定</button>
         </div>

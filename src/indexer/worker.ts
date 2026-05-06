@@ -170,9 +170,9 @@ class VectorIndexer {
 			if (testModel == null) {
 				return { available: false, message: "Unsupported model type or missing configuration", connectivity: HealthStatus.UNKNOWN_ERROR };
 			}
-			return await testModel.checkConnection();
+			return await testModel.checkConnection({"modelName": modelConfig["modelName"]});
 		} catch (err) {
-			return {availalbe: false, message: err.message || "Connection test failed with an unknown error", connectivity: HealthStatus.UNKNOWN_ERROR };
+			return {available: false, message: err.message || "Connection test failed with an unknown error", connectivity: HealthStatus.UNKNOWN_ERROR };
 		}
 	}
 

@@ -9,7 +9,7 @@ export class AIClientFactory {
         "cohere": CohereRerankClient as any
     };
 
-    private static embeddingClientMap: Record<string, new (url: string, key?: string) => IEmbeddingClient> = {
+    private static embeddingClientMap: Record<string, new (url: string, key?: string, useAsEmbedding?: boolean) => IEmbeddingClient> = {
         "oai": OAIClient as any
     };
 
@@ -24,7 +24,7 @@ export class AIClientFactory {
 
     static getEmbeddingClient(type: string, baseUrl: string, apiKey?: string): IEmbeddingClient | null {
         const ClientClass = this.embeddingClientMap[type.toLowerCase()];
-        return ClientClass ? new ClientClass(baseUrl, apiKey) : null;
+        return ClientClass ? new ClientClass(baseUrl, apiKey, true) : null;
     }
 
     static getRerankClient(type: string, baseUrl: string, apiKey?: string): IRerankClient | null {

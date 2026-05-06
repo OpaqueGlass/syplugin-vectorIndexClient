@@ -154,4 +154,9 @@ interface ModelConfig {
   modelType: string;
   baseUrl: string;
   apiKey?: string;
+  modelName: string;
+}
+
+interface CheckConnectionArgs {
+  modelName: string;
 }
