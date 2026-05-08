@@ -88,7 +88,7 @@ export class VectorServiceManager {
     }
 
     async upsert(chunks: VectorChunk[]): Promise<MultiServiceResponse> {
-        return this.dispatchTask(s => s.upsert(chunks));
+        return this.dispatchTask(async (s) => await s.upsert(chunks));
     }
 
     async delete(targets: DeleteTarget[]): Promise<MultiServiceResponse> {

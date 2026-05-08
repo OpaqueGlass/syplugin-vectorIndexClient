@@ -68,7 +68,7 @@
                         <span v-for="doc in resultDocNames[index]" :key="doc.id" 
                               @click.stop="openDoc(doc.id)"
                               style="color: var(--b3-theme-primary); cursor: pointer; text-decoration: underline;">
-                            {{ doc.name }}
+                            {{ doc.id }}
                         </span>
                     </div>
                 </li>
@@ -224,6 +224,7 @@ watch(ragType, async (newType) => {
     if (!newType) return;
     const worker = await useWorker();
     const mode = await worker.getServiceQueryType(newType);
+    logPush("ragTYpe", mode)
     currentServiceMode.value = mode as 'qa' | 'search';
 });
 

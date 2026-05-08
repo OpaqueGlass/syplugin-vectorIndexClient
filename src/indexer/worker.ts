@@ -101,12 +101,13 @@ class VectorIndexer {
 			const modelConfig = globalConfig[key + "Model"];
 			const modelType = modelConfig["modelType"];
 			const baseUrl = modelConfig["baseUrl"];
-			const modelName = modelConfig["modelName"]
+			const modelName = modelConfig["modelName"];
+			const apiKey = modelConfig["apiKey"];
 			if (!isValidStr(baseUrl) || !isValidStr(modelName)) {
 				debugPush("由于设置项缺失、模型未能被载入", key, `baseURL ${baseUrl}, modelName ${modelName}`);
 				continue;
 			}
-			this.aiClientDict[key] = AIClientFactory.getChatClient(modelType, baseUrl, modelName, modelConfig);
+			this.aiClientDict[key] = AIClientFactory.getChatClient(modelType, baseUrl, apiKey, modelConfig);
 			debugPush("model setted", key);
 		}
 		this.vectorManager.regiesterAllClient(this.aiClientDict);

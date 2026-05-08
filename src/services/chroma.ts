@@ -3,11 +3,12 @@ import { HealthStatus } from "@/constants";
 import { UpsertError } from "@/exceptions/upsertError";
 import { debugPush, errorPush, logPush } from "@/logger";
 import { getChildBlocks, getDocInfo, getDocOutlineAPI } from "@/syapi";
+import { createChunks } from "@/utils/chunkDivide";
 import { generateUUID } from "@/utils/common";
 import { isValidStr, quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
 import { JSONStorage } from "@/utils/jsonStorageUtil";
 import { getHeadingsByLevel, getMaxDepth, HeadingInfo } from "@/utils/syoutlineUtils";
-import { ChromaClient, Collection, Metadata } from "chromadb";
+import { ChromaClient, Collection, Metadata, Search, Knn, K, GroupBy, MinK } from "chromadb";
 
 
 
@@ -101,6 +102,16 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         // });
     }
 
+    async getCollection() {
+        if (this.collection) {
+            return this.collection;
+        }
+        this.collection = await this.client.getOrCreateCollection({
+            name: this.collectionName,
+        });
+        return this.collection;
+    }
+
     async updateConfig(newConfig: ChromaDBConfig): Promise<void> {
         this.config = newConfig;
 
@@ -134,13 +145,13 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             return {
                 available: false,
                 connectivity: HealthStatus.UNHEALTHY,
-                message: "未配置ai客户端。至少需要配置 嵌入模型。如需完整功能，建议配置聊天模型、嵌入模型、重排序模型，详见README.md。"
+                message: "Chroma连接成功，但由于未配置嵌入模型，服务实际不可用。如需完整功能，建议配置聊天模型、嵌入模型、重排序模型，详见README.md。"
             }
         }
         return {
             available: true,
             connectivity: HealthStatus.HEALTHY,
-            message: "连接成功. (此验证不检查ai模型配置，仅检查数据库连接)"
+            message: "Chroma连接成功"
         }
 
         // 之后的交给aiClient那边判定
@@ -202,7 +213,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         const firstHeadingBlockIndex = docChildBlocks.findIndex(block => block.type === "h");
 
         // 处理不被包含在任何标题块下的内容
-        if (firstHeadingBlockIndex !== 0 && firstHeadingBlockIndex === -1) {
+        if (firstHeadingBlockIndex >= 1 || firstHeadingBlockIndex === -1) {
             const orphanBlocks = docChildBlocks.slice(0, firstHeadingBlockIndex === -1 ? undefined : firstHeadingBlockIndex);
             const docInfo = await getDocInfo(docId);
             const headingInfo: HeadingInfo = {
@@ -214,13 +225,13 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
                 headings: [docInfo.name],
                 headingsIds: [docId]
             }
-            this.upsertSubHeadingContent(orphanBlocks, headingInfo, docId);
+            await this.upsertSubHeadingContent(orphanBlocks, headingInfo, docId);
         }
         // 处理其他块
         // 以特定块为单位请求
         for (let headingInfo of headingLevelResult) {
             const childBlocks = await getChildBlocks(headingInfo.id);
-            this.upsertSubHeadingContent(childBlocks, headingInfo, docId);
+            await this.upsertSubHeadingContent(childBlocks, headingInfo, docId);
         }
 
         return result;
@@ -229,6 +240,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
     async upsertSubHeadingContent(childBlocks: ChildBlockResponse[], parentHeadingInfo: HeadingInfo, docId: string): Promise<void> {
         const chunks = createChunks(childBlocks, parentHeadingInfo, docId, 900);
         const mainMetadatas = chunks.map(c => ({contentType: "original", ...c}));
+        debugPush("单层级内容拆分后：", chunks);
         // 原始内容
         const mainContentList = chunks.map(item => item.content);
         if (this.aiClientServiceDict.embedding == null) {
@@ -246,6 +258,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
         // ai生成提问内容
         if (this.aiClientServiceDict.chat == null) {
+            debugPush("由于未配置聊天模型，不进行摘要环节");
             return;
         }
         try {
@@ -253,13 +266,18 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             const questionLists = await Promise.all(questionPromises);
             for (let i = 0; i < questionLists.length; i++) {
                 const questions = questionLists[i];
+                if (! (questions instanceof Array)) {
+                    logPush("模型返回内容格式无效，跳过", questions);
+                    continue;
+                }
                 const questionEmbeddings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(questions);
                 const questionMetadatas = questions.map(q => ({...chunks[i], question: q, contentType: "question"}));
+                debugPush("Quesiton内容", questions)
                 await this.collection.upsert({
                     ids: questions.map((q, index) => `${chunks[i].ids}-question-${index}`),
                     metadatas: questionMetadatas,
                     embeddings: questionEmbeddings,
-                    documents: questions
+                    documents: Array(questions.length).fill(chunks[i].content)
                 });
             }
         } catch (e) {
@@ -275,29 +293,58 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         const filteredBlock = chunks.filter(c =>
             c.type === "block" && quickCheckIsValidSiyuanId(c.id)
         );
+        await this.getCollection();
         for (let chunk of filteredDoc) {
             await this.upsertSingleDocument(chunk.id);
         }
-        for (let chunk of filteredBlock) {
-            const docId = chunk.parentId;
-            await this.upsertSingleDocument(docId);
-        }
+        // for (let chunk of filteredBlock) {
+        // }
+        // const docIdsToProcess = new Set<string>();
+
+        // 如果块也认为是文档：
+        // for (const chunk of chunks) {
+        //     if (!quickCheckIsValidSiyuanId(chunk.id)) continue;
+            
+        //     if (chunk.type === "doc") {
+        //         docIdsToProcess.add(chunk.id);
+        //     } else if (chunk.type === "block" && chunk.parentId) {
+        //         docIdsToProcess.add(chunk.parentId);
+        //     }
+        // }
+
+        // // 每一个文档只执行一次
+        // for (const docId of docIdsToProcess) {
+        //     await this.upsertSingleDocument(docId);
+        // }
     }
 
     async query(text: string): Promise<QueryResult[]> {
-        const embeddings = await this.aiClient.wrappedEmbeddings([text]);
+        const embeddings = await this.aiClientServiceDict.embedding.wrappedEmbeddings([text]);
+        // 仅在ChromaCloud生效，暂时禁用
+        // const searchFun = new Search()
+        //     .rank(Knn({query: embeddings[0]}))
+        //     .groupBy(new GroupBy(
+        //         [K("block_ids")],
+        //         new MinK([K.SCORE], 1)
+        //     ))
+        //     .limit(50)
+        //     .select(K.DOCUMENT, K.METADATA);
+        // const searchResponse = await this.collection.search(searchFun);
+        // logPush("searchResult", searchResponse);
         const queryResult = await this.collection.query({
             queryEmbeddings: embeddings,
         });
-
-        if (this.aiClientServiceDict.rerank == null) {
+        // TODO: 结果需要unique，保证一下id唯一
+        logPush("queryResult", queryResult);
+        if (this.aiClientServiceDict.rerank == null || true) {
             let finalResult = [];
-            for (let i = 0; i < queryResult.documents.length; i++) {
+            for (let i = 0; i < queryResult.documents[0].length; i++) {
                 finalResult.push({
-                    "content": queryResult.documents[i],
-                    "ids": queryResult.metadatas[i]["block_ids"] ?? queryResult.metadatas[i]["doc_id"]
+                    "content": queryResult.documents[0][i],
+                    "ids": queryResult.metadatas[0][i]["block_ids"] ?? queryResult.metadatas[0][i]["doc_id"]
                 })
             }
+            logPush("query:FinalResult", finalResult);
             return finalResult;
         } else {
             // rerank

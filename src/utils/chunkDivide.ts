@@ -71,7 +71,7 @@ function splitTextSemantically(text: string, maxLength: number): string[] {
 /**
  * 主函数：处理 Blocks 并生成 Chunks
  */
-function createChunks(
+export function createChunks(
     childBlocks: ChildBlockResponse[],
     parentHeadingInfo: HeadingInfo,
     docId: string,
