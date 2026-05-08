@@ -5,9 +5,9 @@ import { isValidStr } from "@/utils/commonCheck";
 
 export class CohereRerankClient extends BaseAIClient implements IRerankClient {
 
-    constructor(baseUrl: string, apiKey?: string) {
+    constructor(baseUrl: string, apiKey?: string, otherArgs?: AIClientOtherConfigs) {
         const sanitizedBaseUrl = baseUrl.replace(/\/+$/, '');
-        super(sanitizedBaseUrl, apiKey);
+        super(sanitizedBaseUrl, apiKey, otherArgs);
     }
 
     /**

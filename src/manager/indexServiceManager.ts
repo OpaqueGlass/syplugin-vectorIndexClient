@@ -1,15 +1,33 @@
 // vectorManager.ts
-import { warnPush } from "@/logger";
+import { debugPush, warnPush } from "@/logger";
 
 export class VectorServiceManager {
     private services: Map<string, IVectorStoreService> = new Map();
+	private aiClientDict: AIClientDict = {"chat": null, "embedding": null, "rerank": null}; 
 
     /**
      * 注册并初始化一个新的服务
      */
     async registerService(id: string, service: IVectorStoreService, config: any) {
         await service.initialize(config);
+        service.setAIClientDict(this.aiClientDict);
         this.services.set(id, service);
+    }
+
+    async registerClient(type: string, client) {
+        if (type in this.aiClientDict) {
+            this.aiClientDict[type] = client;
+        } else {
+            throw new Error("AI client type note supported. " + type);
+        }
+    }
+    async regiesterAllClient(clientDict: AIClientDict) {
+        for (let key of Object.keys(this.aiClientDict)) {
+            debugPush("setting", key)
+            if (clientDict[key] !== undefined) {
+                this.aiClientDict[key] = clientDict[key];
+            }
+        }
     }
 
     async getRegisteredServicesIds() {

@@ -38,7 +38,7 @@ export function initSettingProperty() {
                 new ConfigProperty({ key: "lightRAG.test", type: "BUTTON", btndo: async()=>{
                     showPluginMessage("正在测试连接。");
                     const worker = await useWorker();
-                    worker.checkHealth("lightRAG").then(result=>{
+                    worker.checkConfig("lightRAG").then(result=>{
                         showValidationResultDialog(result);
                     });
                 }}),
@@ -50,6 +50,13 @@ export function initSettingProperty() {
                 new ConfigProperty({ key: "chroma.enabled", type: "SWITCH" }),
                 new ConfigProperty({ key: "chroma.baseUrl", type: "TEXT" }),
                 new ConfigProperty({ key: "chroma.header", type: "TEXTAREA" }),
+                new ConfigProperty({ key: "chroma.test", type: "BUTTON", btndo: async()=>{
+                    showPluginMessage("正在测试连接。");
+                    const worker = await useWorker();
+                    worker.checkConfig("chroma").then(result=>{
+                        showValidationResultDialog(result);
+                    });
+                }}),
             ]
         }),
         new TabProperty({
@@ -66,6 +73,9 @@ export function initSettingProperty() {
                     new ConfigProperty({ key: "embeddingModel.baseUrl", type: "TEXT" }),
                     new ConfigProperty({ key: "embeddingModel.apiKey", type: "TEXT" }),
                     new ConfigProperty({ key: "embeddingModel.modelName", type: "TEXT" }),
+                    new ConfigProperty({ key: "embeddingModel.maxInputsCount", type: "NUMBER" }),
+                    new ConfigProperty({ key: "embeddingModel.maxTotalCharacters", type: "NUMBER" }),
+                    new ConfigProperty({ key: "embeddingModel.maxSingleCharacters", type: "NUMBER" }),
                     new ConfigProperty({ key: "embeddingModel.test", type: "BUTTON"}),
                 ],
                 "rerankModel": [

@@ -8,6 +8,7 @@ export class CONSTANTS {
 
 export class INDEXER_CONSTANTS {
     public static readonly LIGHTRAG: string = "lightRAG";
+    public static readonly CHROMA: string = "chroma";
 }
 
 export enum HealthStatus {

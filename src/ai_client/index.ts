@@ -16,7 +16,7 @@ export interface RequestOptions {
 }
 
 export interface ChatCreateParams {
-    model: string;
+    model?: string;
     messages: SimpleMessage[];
     temperature?: number;
     stream?: boolean;
@@ -48,10 +48,12 @@ export interface IBaseClient {
 
 export interface IChatClient extends IBaseClient {
     chat(body: ChatCreateParams, options?: RequestOptions): Promise<string>;
+    getAlternateTextQuestion(context: string): Promise<string[]>;
 }
 
 export interface IEmbeddingClient extends IBaseClient {
     embeddings(body: EmbeddingCreateParams, options?: RequestOptions): Promise<number[][]>;
+    wrappedEmbeddings(documents: string[]): Promise<number[][]>;
 }
 
 export interface IRerankClient extends IBaseClient {
@@ -63,7 +65,8 @@ export abstract class BaseAIClient implements IBaseClient {
     
     constructor(
         public readonly baseUrl: string, 
-        public readonly apiKey?: string
+        public readonly apiKey?: string,
+        public readonly otherArgs?: AIClientOtherConfigs,
     ) {
         if (apiKey) {
             this.headers["Authorization"] = `Bearer ${apiKey}`;

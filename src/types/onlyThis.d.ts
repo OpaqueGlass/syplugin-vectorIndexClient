@@ -67,7 +67,7 @@ interface IVectorStoreService<TConfig = any> {
    */
   initialize(config: TConfig): Promise<void>;
 
-  setEmbeddingService(embeddingService: any): void;
+  setAIClientDict(aiClientDict: AIClientDict): void;
 
   /**
    * 动态更新配置 (热更新或重连)
@@ -144,10 +144,10 @@ interface HealthCheckResult {
     connectivity: HealthStatus;
 }
 
-interface AiClientDict {
-  "chat": IChatClient,
-  "embedding": IEmbeddingClient,
-  "rerank": IRerankClient
+interface AIClientDict {
+  "chat"?: IChatClient,
+  "embedding"?: IEmbeddingClient,
+  "rerank"?: IRerankClient
 }
 
 interface ModelConfig {
@@ -159,4 +159,11 @@ interface ModelConfig {
 
 interface CheckConnectionArgs {
   modelName: string;
+}
+
+interface AIClientOtherConfigs {
+  modelName?: string,
+  maxInputsCount?: number, // embedding模型，最多输入的条目个数
+  maxTotalCharacters?: number, // 最多输入的总字符数
+  maxSingleCharacters?: number, // embedding模型，最多单个条目输入的字符数量
 }

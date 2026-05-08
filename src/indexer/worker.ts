@@ -18,6 +18,7 @@ import { ChromaClient } from "chromadb";
 // TODO: 下面这个导入有问题，排查一下是否引入了不能使用的玩意
 import { AIClientFactory} from "@/ai_client/factory";
 import { IChatClient, IEmbeddingClient, IRerankClient } from "@/ai_client";
+import { ChromaService } from "@/services/chroma";
 
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
@@ -50,7 +51,7 @@ class VectorIndexer {
 	private recentTaskInfo: any[] = [];
 	private g_setting_cache: any = null;
 	private isLeader: boolean = false;
-	private aiClientDict: AiClientDict = {"chat": null, "embedding": null, "rerank": null}; 
+	private aiClientDict: AIClientDict = {"chat": null, "embedding": null, "rerank": null}; 
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
 
@@ -58,6 +59,7 @@ class VectorIndexer {
 
 	private IndexerServices: { [key: string]: any } = {
 		[INDEXER_CONSTANTS.LIGHTRAG]: LightRAGService,
+		[INDEXER_CONSTANTS.CHROMA]: ChromaService
 	};
 
     constructor() {
@@ -97,9 +99,18 @@ class VectorIndexer {
 		// 初始化模型：
 		for (let key of Object.keys(this.aiClientDict)) {
 			const modelConfig = globalConfig[key + "Model"];
-			this.aiClientDict[key] = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+			const modelType = modelConfig["modelType"];
+			const baseUrl = modelConfig["baseUrl"];
+			const modelName = modelConfig["modelName"]
+			if (!isValidStr(baseUrl) || !isValidStr(modelName)) {
+				debugPush("由于设置项缺失、模型未能被载入", key, `baseURL ${baseUrl}, modelName ${modelName}`);
+				continue;
+			}
+			this.aiClientDict[key] = AIClientFactory.getChatClient(modelType, baseUrl, modelName, modelConfig);
+			debugPush("model setted", key);
 		}
-		
+		this.vectorManager.regiesterAllClient(this.aiClientDict);
+
 		// 读取配置，初始化服务
 		const allPluginedIndexers = Object.values(INDEXER_CONSTANTS);
 		for (const indexerId of allPluginedIndexers) {
@@ -149,12 +160,26 @@ class VectorIndexer {
 		return null;
 	}
 
+	async checkConfig(serviceId: string) {
+		const service = this.vectorManager.getServiceById(serviceId);
+		if (service) {
+			const config = this.g_setting_cache[serviceId];
+			return await service.validateConfig(config);
+		}
+		return {
+			available: false,
+			message: "无法测试未启用的服务，请先启用服务",
+			connectivity: HealthStatus.UNKNOWN_ERROR
+		};
+	}
+
 	async checkModelHealth(modelType: "embedding"|"chat"|"rerank", modelConfig: ModelConfig) {
 		let testModel: IChatClient|IRerankClient|IEmbeddingClient|null = null;
 		try {
 			if (modelConfig == null) {
 				testModel = this.aiClientDict[modelType];
 			} else {
+				logPush("无已载入的模型，重新创建");
 				switch (modelType) {
 					case "chat":
 						testModel = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);

@@ -63,7 +63,7 @@ export class LightRAGService implements IVectorStoreService<LightRAGConfig> {
         return this.config;
     }
 
-    setEmbeddingService(embeddingService: any): void {
+    setAIClientDict(embeddingService: any): void {
         // 由LightRAG server设定，此处不使用
     }
 

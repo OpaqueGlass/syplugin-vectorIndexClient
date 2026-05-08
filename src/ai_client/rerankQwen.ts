@@ -5,8 +5,8 @@ import { isValidStr } from "@/utils/commonCheck";
 
 export class QwenRerankClient extends BaseAIClient implements IRerankClient {
 
-    constructor(baseUrl: string, apiKey?: string) {
-        super(baseUrl, apiKey);
+    constructor(baseUrl: string, apiKey?: string, otherArgs?: AIClientOtherConfigs) {
+        super(baseUrl, apiKey, otherArgs);
     }
 
     /**

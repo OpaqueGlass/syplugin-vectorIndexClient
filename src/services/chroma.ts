@@ -1,7 +1,7 @@
-import { AIClient } from "@/ai_client";
+import { AIClient, IEmbeddingClient } from "@/ai_client";
 import { HealthStatus } from "@/constants";
 import { UpsertError } from "@/exceptions/upsertError";
-import { errorPush, logPush } from "@/logger";
+import { debugPush, errorPush, logPush } from "@/logger";
 import { getChildBlocks, getDocInfo, getDocOutlineAPI } from "@/syapi";
 import { generateUUID } from "@/utils/common";
 import { isValidStr, quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
@@ -32,6 +32,12 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
     private aiClient: AIClient;
 
+    private aiClientServiceDict: AIClientDict = {
+        "chat": null,
+        "embedding": null,
+        "rerank": null,
+    }
+
     private embeddingServices = {
         "embedding": null,
         // "embedding-vl": null,
@@ -41,7 +47,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         // "rerank-vl-similarity": null
     }
 
-    private collectionName = "siyuan_docs";
+    private collectionName = "siyuan_docs_ogvic";
 
     private collection: Collection;
 
@@ -72,8 +78,10 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         return this.config;
     }
 
-    setEmbeddingService(embeddingService: any): void {
-        this.aiClient = embeddingService;
+    setAIClientDict(aiClientDict: AIClientDict): void {
+        debugPush("settingAiClient", aiClientDict)
+        this.aiClient = aiClientDict.chat;
+        this.aiClientServiceDict = aiClientDict;
     }
 
     constructor() {
@@ -102,16 +110,9 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         try {
             const collections = await this.client.listCollections();
             // 创建我们的collection
-            if (!collections.some(col => col.name === this.collectionName)) {
-                this.collection =  await this.client.createCollection({
-                    name: this.collectionName,
-                });
-                logPush(`Collection '${this.collectionName}' created successfully.`);
-            } else {
-                this.collection = await this.client.getCollection({
-                    name: this.collectionName,
-                });
-            }
+            this.collection = await this.client.getOrCreateCollection({
+                name: this.collectionName,
+            });
         } catch (e: any) {
             let status = HealthStatus.UNREACHABLE;
             errorPush(`连接ChromaDB失败。Connect to ChromaDB failed. ${e}`);
@@ -129,6 +130,20 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
                 message: "连接成功！Connection successful!"
             }
         }
+        if (this.aiClientServiceDict.embedding === null) {
+            return {
+                available: false,
+                connectivity: HealthStatus.UNHEALTHY,
+                message: "未配置ai客户端。至少需要配置 嵌入模型。如需完整功能，建议配置聊天模型、嵌入模型、重排序模型，详见README.md。"
+            }
+        }
+        return {
+            available: true,
+            connectivity: HealthStatus.HEALTHY,
+            message: "连接成功. (此验证不检查ai模型配置，仅检查数据库连接)"
+        }
+
+        // 之后的交给aiClient那边判定
         try {
             const embedding = await this.aiClient.embeddings(config.embeddingModel, "test", config.maxEmbeddingTokens);
             if (!embedding || embedding.length === 0) {
@@ -212,11 +227,44 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
     }
 
     async upsertSubHeadingContent(childBlocks: ChildBlockResponse[], parentHeadingInfo: HeadingInfo, docId: string): Promise<void> {
-        const chunks = createChunks(childBlocks, parentHeadingInfo, docId, 600);
-        this.collection.upsert({
+        const chunks = createChunks(childBlocks, parentHeadingInfo, docId, 900);
+        const mainMetadatas = chunks.map(c => ({contentType: "original", ...c}));
+        // 原始内容
+        const mainContentList = chunks.map(item => item.content);
+        if (this.aiClientServiceDict.embedding == null) {
+            throw new Error("Embedding Client not available");
+        }
+        const mainContentEmbedings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(mainContentList);
+
+        await this.collection.upsert({
             ids: chunks.map(c => c.ids),
-            metadatas: chunks.map(c => ({...c})),
+            metadatas: mainMetadatas,
+            embeddings: mainContentEmbedings,
+            documents: mainContentList
         });
+        logPush(`内容已上传`, mainContentList, mainMetadatas);
+
+        // ai生成提问内容
+        if (this.aiClientServiceDict.chat == null) {
+            return;
+        }
+        try {
+            const questionPromises = mainContentList.map(content => this.aiClientServiceDict.chat.getAlternateTextQuestion(content));
+            const questionLists = await Promise.all(questionPromises);
+            for (let i = 0; i < questionLists.length; i++) {
+                const questions = questionLists[i];
+                const questionEmbeddings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(questions);
+                const questionMetadatas = questions.map(q => ({...chunks[i], question: q, contentType: "question"}));
+                await this.collection.upsert({
+                    ids: questions.map((q, index) => `${chunks[i].ids}-question-${index}`),
+                    metadatas: questionMetadatas,
+                    embeddings: questionEmbeddings,
+                    documents: questions
+                });
+            }
+        } catch (e) {
+            errorPush(`生成或嵌入提问失败。Failed to generate questions. ${e}`);
+        }
 
     }
 
@@ -234,23 +282,26 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             const docId = chunk.parentId;
             await this.upsertSingleDocument(docId);
         }
-        
     }
 
     async query(text: string): Promise<QueryResult[]> {
-        // const payload = {
-        //     query: text,
-        //     mode: this.config.mode,
-        //     top_k: this.config.topK,
-        //     stream: false,
-        //     include_references: true
-        // };
+        const embeddings = await this.aiClient.wrappedEmbeddings([text]);
+        const queryResult = await this.collection.query({
+            queryEmbeddings: embeddings,
+        });
 
-        // const data = await this.request('/query', {
-        //     method: 'POST',
-        //     body: JSON.stringify(payload)
-        // });
-
+        if (this.aiClientServiceDict.rerank == null) {
+            let finalResult = [];
+            for (let i = 0; i < queryResult.documents.length; i++) {
+                finalResult.push({
+                    "content": queryResult.documents[i],
+                    "ids": queryResult.metadatas[i]["block_ids"] ?? queryResult.metadatas[i]["doc_id"]
+                })
+            }
+            return finalResult;
+        } else {
+            // rerank
+        }
         // return [{
         //     "content": data.response,
         //     "ids": data.references.filter(ref => quickCheckIsValidSiyuanId(ref.file_path)).map((ref: any) => ref.file_path)
@@ -259,6 +310,8 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
     async clearAll(): Promise<void> {
         // await this.request('/documents', { method: 'DELETE' });
+        await this.client.deleteCollection({ name: this.collectionName});
+        this.collection = await this.client.getOrCreateCollection({ name: this.collectionName});
     }
 
     async delete(targets: DeleteTarget[]): Promise<void> {
@@ -273,7 +326,11 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
      * @param docIds 文档 ID 数组
      */
     async deleteDocuments(docIds: string[]): Promise<void> {
-        
+        docIds.forEach(item => {
+            this.collection.delete({ where: {
+                "doc_id": item
+            }});
+        });
     }
 
     /**
@@ -289,19 +346,11 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
      * 获取索引状态，包括是否支持获取状态、失败的文档数量和原因、待处理的文档数量等信息
      */
     async getIndexStatus(): Promise<IndexStatus>{
-        const data = await this.request('/documents/status_counts', {
-            method: 'GET'
-        });
-        const statusCounts = data["status_counts"];
-        const pipelineStatus = await this.request("/documents/pipeline_status", {
-            method: "GET"
-        });
-        const failedReasons = isValidStr(pipelineStatus["latest_message"]) ? pipelineStatus["history_messages"] : [];
         return {
-            isSupportGetStatus: true,
-            failedCount: statusCounts["FAILED"] || 0,
-            failedReasons: failedReasons,
-            pendingCount:  statusCounts["PENDING"] || 0
+            isSupportGetStatus: false,
+            failedCount: 0,
+            failedReasons: [],
+            pendingCount:  0
         };
     }
 
