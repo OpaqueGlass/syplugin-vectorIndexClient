@@ -1,14 +1,16 @@
 import { AIClient, IEmbeddingClient } from "@/ai_client";
 import { HealthStatus } from "@/constants";
 import { UpsertError } from "@/exceptions/upsertError";
-import { debugPush, errorPush, logPush } from "@/logger";
+import { debugPush, errorPush, logPush, warnPush } from "@/logger";
 import { getChildBlocks, getDocInfo, getDocOutlineAPI } from "@/syapi";
+import { getDocDBitem } from "@/syapi/custom";
 import { createChunks } from "@/utils/chunkDivide";
 import { generateUUID } from "@/utils/common";
 import { isValidStr, quickCheckIsValidSiyuanId } from "@/utils/commonCheck";
 import { JSONStorage } from "@/utils/jsonStorageUtil";
 import { getHeadingsByLevel, getMaxDepth, HeadingInfo } from "@/utils/syoutlineUtils";
 import { ChromaClient, Collection, Metadata, Search, Knn, K, GroupBy, MinK } from "chromadb";
+import { MyEmbeddingFunction } from "./chromaEmbedding";
 
 
 
@@ -18,9 +20,8 @@ interface ChromaDBConfig {
     ssl: boolean;
     headersJson: string;
     topK: number;
-    embeddingModel: string;
-    chatModel: string;
-    maxEmbeddingTokens: number;
+    useRerankModel: boolean;
+    useQuestionAbstract: boolean;
 }
 
 
@@ -30,9 +31,6 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
     private retryCounts: Record<string, number> = {};
 
     private client: ChromaClient;
-
-    private aiClient: AIClient;
-
     private aiClientServiceDict: AIClientDict = {
         "chat": null,
         "embedding": null,
@@ -81,7 +79,6 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
     setAIClientDict(aiClientDict: AIClientDict): void {
         debugPush("settingAiClient", aiClientDict)
-        this.aiClient = aiClientDict.chat;
         this.aiClientServiceDict = aiClientDict;
     }
 
@@ -90,11 +87,25 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
     async initialize(config: ChromaDBConfig): Promise<void> {
         this.config = config;
+        let headerJson = null;
+        try {
+            if (isValidStr(this.config.headersJson)) {
+                headerJson = JSON.parse(this.config.headersJson);
+            }
+        } catch (err) {
+            errorPush("UserSettingFormatERROR: Chroma Request Header Json should be Record<string, string>。用户设置格式错误：Chroma请求头JSON格式错误，无法解析。" + err);
+        }
         this.client = new ChromaClient({
             host: this.config.host,
             port: this.config.port,
             ssl: this.config.ssl,
+            headers: headerJson
         });
+        try {
+            this.getCollection();
+        } catch (e) {
+
+        }
         // this.client.listCollections().then((collections)=>{
         //     logPush("当前数据库中的collections: " + JSON.stringify(collections));
         // }).catch((e)=>{
@@ -108,6 +119,11 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         }
         this.collection = await this.client.getOrCreateCollection({
             name: this.collectionName,
+            configuration: {
+                embeddingFunction: new MyEmbeddingFunction({
+                    func: async (...args)=>{return await this.aiClientServiceDict.embedding.wrappedEmbeddings(...args)}
+                })
+            },
         });
         return this.collection;
     }
@@ -119,10 +135,14 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
 
     async _validateConfig(config: ChromaDBConfig, autoCheck: boolean=true): Promise<HealthCheckResult> {
         try {
-            const collections = await this.client.listCollections();
             // 创建我们的collection
-            this.collection = await this.client.getOrCreateCollection({
+            await this.client.getOrCreateCollection({
                 name: this.collectionName,
+                configuration: {
+                    embeddingFunction: new MyEmbeddingFunction({
+                        func: async (...args)=>{return await this.aiClientServiceDict.embedding.wrappedEmbeddings(...args)}
+                    })
+                }
             });
         } catch (e: any) {
             let status = HealthStatus.UNREACHABLE;
@@ -153,45 +173,6 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             connectivity: HealthStatus.HEALTHY,
             message: "Chroma连接成功"
         }
-
-        // 之后的交给aiClient那边判定
-        try {
-            const embedding = await this.aiClient.embeddings(config.embeddingModel, "test", config.maxEmbeddingTokens);
-            if (!embedding || embedding.length === 0) {
-                throw new Error("未能成功获取测试文本的向量表示。Failed to get embedding for test text.");
-            }
-        } catch (e: any) {
-            errorPush(`连接AI提供商失败。Connect to AI provider failed. ${e}`);
-            return {
-                available: false,
-                connectivity: HealthStatus.UNREACHABLE,
-                message: `请检查AI提供商配置是否正确: ${e.message}`
-            };
-        }
-        try {
-            const chatResult = await this.aiClient.chat(config.chatModel, [
-                { role: "system", content: "你是一个AI助手。" },
-                { role: "user", content: "请只回复“是”。" }
-            ], {
-                max_tokens: 20
-            });
-            if (!isValidStr(chatResult)) {
-                throw new Error("未能成功获取AI提供商的响应。Failed to get response from AI provider.");
-            }
-        } catch (e: any) {
-            errorPush(`连接AI提供商失败。Connect to AI provider failed. ${e}`);
-            return {
-                available: false,
-                connectivity: HealthStatus.UNREACHABLE,
-                message: `请检查AI提供商配置是否正确: ${e.message}`
-            };
-        }
-        return {
-            available: true,
-            connectivity: HealthStatus.HEALTHY,
-            message: "连接成功！Connection successful!"
-        }
-
     }
 
     async validateConfig(config: ChromaDBConfig): Promise<HealthCheckResult> {
@@ -211,7 +192,8 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         const headingLevelResult = maxDepth > 0 ? getHeadingsByLevel(result, Math.ceil(maxDepth * 0.6)) : [];
         const docChildBlocks = await getChildBlocks(docId);
         const firstHeadingBlockIndex = docChildBlocks.findIndex(block => block.type === "h");
-
+        
+        const promiseTask = [];
         // 处理不被包含在任何标题块下的内容
         if (firstHeadingBlockIndex >= 1 || firstHeadingBlockIndex === -1) {
             const orphanBlocks = docChildBlocks.slice(0, firstHeadingBlockIndex === -1 ? undefined : firstHeadingBlockIndex);
@@ -225,15 +207,16 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
                 headings: [docInfo.name],
                 headingsIds: [docId]
             }
-            await this.upsertSubHeadingContent(orphanBlocks, headingInfo, docId);
+            promiseTask.push(this.upsertSubHeadingContent(orphanBlocks, headingInfo, docId));
         }
         // 处理其他块
         // 以特定块为单位请求
         for (let headingInfo of headingLevelResult) {
             const childBlocks = await getChildBlocks(headingInfo.id);
-            await this.upsertSubHeadingContent(childBlocks, headingInfo, docId);
+            promiseTask.push(this.upsertSubHeadingContent(childBlocks, headingInfo, docId));
         }
 
+        await Promise.all(promiseTask);
         return result;
     }
 
@@ -261,8 +244,17 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             debugPush("由于未配置聊天模型，不进行摘要环节");
             return;
         }
+        if (!this.config["useQuestionAbstract"]) {
+            debugPush("由于未启用摘要，不进行摘要环节");
+            return;
+        }
+        const docInfo = await getDocDBitem(docId);
         try {
-            const questionPromises = mainContentList.map(content => this.aiClientServiceDict.chat.getAlternateTextQuestion(content));
+            const questionPromises = mainContentList.map(content => this.aiClientServiceDict.chat.getAlternateTextQuestion(content, {
+                "docTitle": docInfo.content,
+                "parentHeading": parentHeadingInfo.content,
+                "docHPath": docInfo.hpath
+            }));
             const questionLists = await Promise.all(questionPromises);
             for (let i = 0; i < questionLists.length; i++) {
                 const questions = questionLists[i];
@@ -295,10 +287,9 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         );
         await this.getCollection();
         for (let chunk of filteredDoc) {
+            await this.deleteDocuments([chunk.id]);
             await this.upsertSingleDocument(chunk.id);
         }
-        // for (let chunk of filteredBlock) {
-        // }
         // const docIdsToProcess = new Set<string>();
 
         // 如果块也认为是文档：
@@ -319,6 +310,8 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
     }
 
     async query(text: string): Promise<QueryResult[]> {
+        await this.getCollection();
+
         const embeddings = await this.aiClientServiceDict.embedding.wrappedEmbeddings([text]);
         // 仅在ChromaCloud生效，暂时禁用
         // const searchFun = new Search()
@@ -331,34 +324,57 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         //     .select(K.DOCUMENT, K.METADATA);
         // const searchResponse = await this.collection.search(searchFun);
         // logPush("searchResult", searchResponse);
+        let whereOption = undefined;
+        if (!this.config.useQuestionAbstract) {
+            whereOption = {};
+            whereOption["contentType"] = "original";
+        }
         const queryResult = await this.collection.query({
             queryEmbeddings: embeddings,
+            where: whereOption
         });
-        // TODO: 结果需要unique，保证一下id唯一
-        logPush("queryResult", queryResult);
-        if (this.aiClientServiceDict.rerank == null || true) {
-            let finalResult = [];
-            for (let i = 0; i < queryResult.documents[0].length; i++) {
+        // 结果需要unique，保证一下id唯一
+        debugPush("queryResult", queryResult);
+        let finalResult: QueryResult[] = [];
+        const seenIds = new Set<string>();
+
+        for (let i = 0; i < queryResult.documents[0].length; i++) {
+            const metadata = queryResult.metadatas[0][i];
+            const currentIds = metadata["block_ids"] ?? [metadata["doc_id"]];
+            // 去重
+            if (currentIds && !seenIds.has(currentIds.toString())) {
+                seenIds.add(currentIds.toString());
                 finalResult.push({
                     "content": queryResult.documents[0][i],
-                    "ids": queryResult.metadatas[0][i]["block_ids"] ?? queryResult.metadatas[0][i]["doc_id"]
-                })
+                    "ids": currentIds as string[]
+                });
             }
-            logPush("query:FinalResult", finalResult);
+        }
+        debugPush("query:FinalResult", finalResult);
+
+        if (this.aiClientServiceDict.rerank == null || this.config["useRerankModel"] === false) {
+            debugPush("unrerank", this.config, this.aiClientServiceDict);
             return finalResult;
         } else {
-            // rerank
+            try {
+                const rerankIdxResult = await this.aiClientServiceDict.rerank.rerank({
+                    "documents": finalResult.map(item => item.content),
+                    "query": text
+                });
+                debugPush("rerankIdxResult", rerankIdxResult);
+                return rerankIdxResult.map(item => finalResult[item.index]);
+            } catch (err) {
+                warnPush("重排序时发生错误", err, "回滚为重排前的结果");
+                return finalResult;
+            }
         }
-        // return [{
-        //     "content": data.response,
-        //     "ids": data.references.filter(ref => quickCheckIsValidSiyuanId(ref.file_path)).map((ref: any) => ref.file_path)
-        // }];
     }
 
     async clearAll(): Promise<void> {
         // await this.request('/documents', { method: 'DELETE' });
         await this.client.deleteCollection({ name: this.collectionName});
-        this.collection = await this.client.getOrCreateCollection({ name: this.collectionName});
+        this.collection = null;
+        this.collection = await this.getCollection();
     }
 
     async delete(targets: DeleteTarget[]): Promise<void> {
@@ -373,11 +389,11 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
      * @param docIds 文档 ID 数组
      */
     async deleteDocuments(docIds: string[]): Promise<void> {
-        docIds.forEach(item => {
-            this.collection.delete({ where: {
-                "doc_id": item
+        for (let id of docIds) {
+            await this.collection.delete({ where: {
+                "doc_id": id
             }});
-        });
+        }
     }
 
     /**

@@ -5,9 +5,14 @@ let g_DEBUG = 5;
 const THRESHOLD = 2;
 const g_NAME = CONSTANTS.PLUGIN_SHORT_NAME;
 const g_FULLNAME = CONSTANTS.PLUGIN_FULL_NAME;
+let relogger = null;
 
 export function setDebugLevel(level: number) {
     g_DEBUG = level;
+}
+
+export function setRelogTo(logger: (str: string, ...args: any[]) => void) {
+    relogger = logger;
 }
 /*
 LEVEL 0 忽略所有
@@ -41,29 +46,44 @@ export function isDebugMode() {
 export function debugPush(str: string, ...args: any[]) {
     if (commonPushCheck() >= 5) {
         console.debug(`${g_FULLNAME}[D] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        if (relogger) {
+            relogger(`[D] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        }
     }
 }
 
 export function infoPush(str: string, ...args: any[]) {
     if (commonPushCheck() >= 3) {
         console.info(`${g_FULLNAME}[I] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        if (relogger) {
+            relogger(`[I] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        }
     }
 }
 
 export function logPush(str: string, ...args: any[]) {
     if (commonPushCheck() >= 4) {
         console.log(`${g_FULLNAME}[L] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        if (relogger) {
+            relogger(`[L] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        }
     }
 }
 
 export function errorPush(str: string, ... args: any[]) {
     if (commonPushCheck() >= 1) {
         console.error(`${g_FULLNAME}[E] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        if (relogger) {
+            relogger(`[E] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        }
     }
 }
 
 export function warnPush(str: string, ... args: any[]) {
     if (commonPushCheck() >= 2) {
         console.warn(`${g_FULLNAME}[W] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        if (relogger) {
+            relogger(`[W] ${new Date().toLocaleTimeString()} ${str}`, ...args);
+        }
     }
 }

@@ -32,7 +32,7 @@ export interface EmbeddingCreateParams {
 }
 
 export interface RerankCreateParams {
-    model: string;
+    model?: string;
     query: string;
     documents: string[];
     top_n?: number;
@@ -48,7 +48,7 @@ export interface IBaseClient {
 
 export interface IChatClient extends IBaseClient {
     chat(body: ChatCreateParams, options?: RequestOptions): Promise<string>;
-    getAlternateTextQuestion(context: string): Promise<string[]>;
+    getAlternateTextQuestion(context: string, fileInfo?: AlternateTextDocInfo): Promise<string[]>;
 }
 
 export interface IEmbeddingClient extends IBaseClient {
@@ -57,7 +57,7 @@ export interface IEmbeddingClient extends IBaseClient {
 }
 
 export interface IRerankClient extends IBaseClient {
-    rerank(body: RerankCreateParams, options?: RequestOptions): Promise<string[]>;
+    rerank(body: RerankCreateParams, options?: RequestOptions): Promise<AIRerankResult[]>;
 }
 
 export abstract class BaseAIClient implements IBaseClient {

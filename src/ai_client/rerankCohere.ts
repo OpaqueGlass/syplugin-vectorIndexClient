@@ -39,8 +39,9 @@ export class CohereRerankClient extends BaseAIClient implements IRerankClient {
      * @param body 包含 model, query, documents (candidates), top_n (topK)
      * @param options 可选的请求配置
      */
-    async rerank(body: RerankCreateParams, options?: RequestOptions): Promise<string[]> {
-        const { model, query, documents, top_n, ...rest } = body;
+    async rerank(body: RerankCreateParams, options?: RequestOptions): Promise<AIRerankResult[]> {
+        let { model, query, documents, top_n, ...rest } = body;
+        model = model ?? this.otherArgs["modelName"];
 
         const requestBody = {
             model: model,
@@ -53,8 +54,7 @@ export class CohereRerankClient extends BaseAIClient implements IRerankClient {
 
         const rankedCandidates = response.results
             .sort((a: any, b: any) => b.relevance_score - a.relevance_score) // 降序排列
-            .map((result: any) => documents[result.index]);
-
+            .map((item: any) => ({ index: item.index, relevance_score: item.relevance_score }));
         return rankedCandidates;
     }
 

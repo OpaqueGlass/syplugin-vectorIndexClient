@@ -166,4 +166,16 @@ interface AIClientOtherConfigs {
   maxInputsCount?: number, // embedding模型，最多输入的条目个数
   maxTotalCharacters?: number, // 最多输入的总字符数
   maxSingleCharacters?: number, // embedding模型，最多单个条目输入的字符数量
+  dimensions?: number, // embedding模型，嵌入维度
+}
+
+interface AlternateTextDocInfo {
+  docTitle?: string,
+  parentHeading?: string,
+  docHPath?: string
+}
+
+interface AIRerankResult {
+  index: number;
+  relevance_score: number;
 }

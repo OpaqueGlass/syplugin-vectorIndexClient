@@ -17,6 +17,19 @@ export class AIClientFactory {
         "oai": OAIClient as any
     };
 
+    static getClient(modelType:string, type:string, baseUrl: string, apiKey?:string, otherArgs?: AIClientOtherConfigs): IChatClient | IEmbeddingClient | IRerankClient | null {
+        switch (modelType.toLowerCase()) {
+            case "chat":
+                return this.getChatClient(type, baseUrl, apiKey, otherArgs);
+            case "embedding":
+                return this.getEmbeddingClient(type, baseUrl, apiKey, otherArgs);
+            case "rerank":
+                return this.getRerankClient(type, baseUrl, apiKey, otherArgs);
+            default:
+                return null;
+        }
+    }
+
     static getChatClient(type: string, baseUrl: string, apiKey?: string, otherArgs?: AIClientOtherConfigs): IChatClient | null {
         const ClientClass = this.chatClientMap[type.toLowerCase()];
         return ClientClass ? new ClientClass(baseUrl, apiKey, otherArgs) : null;

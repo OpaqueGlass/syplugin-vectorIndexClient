@@ -49,7 +49,7 @@ export function initSettingProperty() {
                 new ConfigProperty({ key: "aboutChroma", type: "TIPS" }),
                 new ConfigProperty({ key: "chroma.enabled", type: "SWITCH" }),
                 new ConfigProperty({ key: "chroma.baseUrl", type: "TEXT" }),
-                new ConfigProperty({ key: "chroma.header", type: "TEXTAREA" }),
+                new ConfigProperty({ key: "chroma.headerJson", type: "TEXTAREA" }),
                 new ConfigProperty({ key: "chroma.test", type: "BUTTON", btndo: async()=>{
                     showPluginMessage("正在测试连接。");
                     const worker = await useWorker();
@@ -57,6 +57,8 @@ export function initSettingProperty() {
                         showValidationResultDialog(result);
                     });
                 }}),
+                new ConfigProperty({ key: "chroma.useQuestionAbstract", type: "SWITCH" }),
+                new ConfigProperty({ key: "chroma.useRerankModel", type: "SWITCH" }),
             ]
         }),
         new TabProperty({
@@ -73,6 +75,7 @@ export function initSettingProperty() {
                     new ConfigProperty({ key: "embeddingModel.baseUrl", type: "TEXT" }),
                     new ConfigProperty({ key: "embeddingModel.apiKey", type: "TEXT" }),
                     new ConfigProperty({ key: "embeddingModel.modelName", type: "TEXT" }),
+                    new ConfigProperty({ key: "embeddingModel.dimensions", type: "NUMBER" }),
                     new ConfigProperty({ key: "embeddingModel.maxInputsCount", type: "NUMBER" }),
                     new ConfigProperty({ key: "embeddingModel.maxTotalCharacters", type: "NUMBER" }),
                     new ConfigProperty({ key: "embeddingModel.maxSingleCharacters", type: "NUMBER" }),
@@ -84,6 +87,9 @@ export function initSettingProperty() {
                     new ConfigProperty({ key: "rerankModel.apiKey", type: "TEXT" }),
                     new ConfigProperty({ key: "rerankModel.modelName", type: "TEXT" }),
                     new ConfigProperty({ key: "rerankModel.test", type: "BUTTON"}),
+                    // new ConfigProperty({ key: "rerankModel.maxInputsCount", type: "NUMBER" }),
+                    // new ConfigProperty({ key: "rerankModel.maxTotalCharacters", type: "NUMBER" }),
+                    // new ConfigProperty({ key: "rerankModel.maxSingleCharacters", type: "NUMBER" }),
                 ],
             },
         }),

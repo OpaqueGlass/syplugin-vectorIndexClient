@@ -7,7 +7,7 @@
 import { exportMdContent, createFolder, queryAPI, listDocTree } from "@/syapi/index";
 import { CacheQueue } from ".";
 import { isValidStr } from "@/utils/commonCheck";
-import { debugPush, errorPush, logPush, warnPush } from "@/logger";
+import { debugPush, errorPush, logPush, setRelogTo, warnPush } from "@/logger";
 import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
@@ -48,7 +48,8 @@ class VectorIndexer {
     private idleCycles = 0;
     private readonly MAX_IDLE_CYCLES = 3;
     private readonly INTERVAL_MS = 10000;
-	private recentTaskInfo: any[] = [];
+	private recentTaskWarningInfo: any[] = [];
+	private recentTaskLogInfo: any[] = [];
 	private g_setting_cache: any = null;
 	private isLeader: boolean = false;
 	private aiClientDict: AIClientDict = {"chat": null, "embedding": null, "rerank": null}; 
@@ -70,14 +71,25 @@ class VectorIndexer {
 		warnPush("Worker test function called.");
 	}
 
-	public getRecentTaskInfo() {
-		return this.recentTaskInfo;
+	public getRecentTaskWarningInfo() {
+		return this.recentTaskWarningInfo;
 	}
 
-	public appendInfoToRecentTasks(info: any) {
-		this.recentTaskInfo.push(info);
-		if (this.recentTaskInfo.length > 20) {
-			this.recentTaskInfo.shift();
+	public getRecentTaskLogInfo() {
+		return this.recentTaskLogInfo;
+	}
+
+	public appendWarningToRecentTasks(info: any) {
+		this.recentTaskWarningInfo.push(info);
+		if (this.recentTaskWarningInfo.length > 20) {
+			this.recentTaskWarningInfo.shift();
+		}
+	}
+
+	public appendLogToRecentTasks(info: any) {
+		this.recentTaskLogInfo.push(info);
+		if (this.recentTaskLogInfo.length > 100) {
+			this.recentTaskLogInfo.shift();
 		}
 	}
 
@@ -107,7 +119,7 @@ class VectorIndexer {
 				debugPush("由于设置项缺失、模型未能被载入", key, `baseURL ${baseUrl}, modelName ${modelName}`);
 				continue;
 			}
-			this.aiClientDict[key] = AIClientFactory.getChatClient(modelType, baseUrl, apiKey, modelConfig);
+			this.aiClientDict[key] = AIClientFactory.getClient(key, modelType, baseUrl, apiKey, modelConfig);
 			debugPush("model setted", key);
 		}
 		this.vectorManager.regiesterAllClient(this.aiClientDict);
@@ -129,6 +141,7 @@ class VectorIndexer {
 		}
 		this.g_setting_cache = globalConfig;
         this.startCycle();
+		setRelogTo(this.appendLogToRecentTasks.bind(this));
     }
 
 	async stop() {
@@ -211,6 +224,7 @@ class VectorIndexer {
 	}
 
 	setLeaderFlag(isLeader: boolean) {
+		debugPush("leaderChanged", isLeader);
 		this.isLeader = isLeader;
 		this.cacheQueue.setWritable(isLeader);
 	}
@@ -291,12 +305,12 @@ class VectorIndexer {
 						logPush("忽略单一服务错误，继续下一个文档:", docId);
 						return true;
 					} else {
-						this.appendInfoToRecentTasks({ docId, result, time: new Date().toISOString() });
+						this.appendWarningToRecentTasks({ docId, result, time: new Date().toISOString() });
 						return false;
 					}
 				} else if (result.successCount === 0) {
-					errorPush("所有服务均处理失败:", result);
-					this.appendInfoToRecentTasks({ docId, result, time: new Date().toISOString() });
+					logPush("所有服务均处理失败:", result);
+					this.appendWarningToRecentTasks({ docId, result, time: new Date().toISOString() });
 					return false;
 				} else {
 					debugPush("文档处理成功:", docId, result);
@@ -366,6 +380,9 @@ class VectorIndexer {
 							await this.cacheQueue.addToQueue(docId, 10000);
 							await sleep(10000);
 							break; // 遇到错误建议跳出本次 while，等待下一轮
+						} else {
+							// 确保落盘，主要是leader判定较晚，一般刚启动完成的任务都无法落盘
+							this.cacheQueue.persist();
 						}
 					}
 				} else {

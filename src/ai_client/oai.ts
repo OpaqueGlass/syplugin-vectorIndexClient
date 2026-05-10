@@ -1,6 +1,6 @@
 import { BaseAIClient, IChatClient, IEmbeddingClient, ChatCreateParams, EmbeddingCreateParams, RequestOptions } from "@/ai_client/index";
-import { HealthStatus } from "@/constants";
-import { debugPush, logPush } from "@/logger";
+import { DEFAULT_QUESITON_ABSTRUCT_PROMPT, HealthStatus } from "@/constants";
+import { debugPush, logPush, warnPush } from "@/logger";
 import { isValidStr } from "@/utils/commonCheck";
 import OpenAI from 'openai';
 import { jsonrepair } from 'jsonrepair';
@@ -49,7 +49,9 @@ export class OAIClient extends BaseAIClient implements IChatClient, IEmbeddingCl
      * 实现 IEmbeddingClient
      */
     async embeddings(body: EmbeddingCreateParams, options?: RequestOptions): Promise<number[][]> {
-        const { model, input, dimensions, ...restBody } = body;
+        let { model, input, dimensions, ...restBody } = body;
+        model = model ?? this.otherArgs["modelName"];
+        dimensions = dimensions ?? this.otherArgs["dimensions"];
 
         const response = await this.oaiClient.embeddings.create({
             model: model,
@@ -68,9 +70,10 @@ export class OAIClient extends BaseAIClient implements IChatClient, IEmbeddingCl
         let currentBatch: string[] = [];
         let currentBatchChars = 0;
 
-        for (const doc of documents) {
+        for (let doc of documents) {
             if (maxSingleCharacters >= 0 && doc.length > maxSingleCharacters) {
-                throw new Error(`[嵌入内容超长]输入的文档中，部分文档长度(${doc.length})超出限制(${maxSingleCharacters})`);
+                warnPush(`[嵌入内容超长]输入的文档中，部分文档长度(${doc.length})超出限制(${maxSingleCharacters}，将被截断处理。)`);
+                doc = doc.substring(0, maxSingleCharacters);
             }
 
             const isCharLimitReached = maxTotalCharacters > 0 && (currentBatchChars + doc.length > maxTotalCharacters);
@@ -99,10 +102,12 @@ export class OAIClient extends BaseAIClient implements IChatClient, IEmbeddingCl
         return results.flat();
     }
 
-    async getAlternateTextQuestion(context: string): Promise<string[]> {
-        const prompt = `由于用户在检索过程中可能给出的是自然语言的提问描述、关键内容描述而不一定是明确的查询关键词，我们计划在文本索引过程中考虑直接使用被检索内容的提问描述、关键内容描述。请你根据以下文本内容，提取出其中最能代表文本内容的提问描述、关键内容描述，要求简洁且具有代表性，输出格式为json数组，数组中每个元素是一个字符串，字符串内容是提取出的提问描述、关键内容描述：
-文本内容：${context}
-输出：`;
+    async getAlternateTextQuestion(context: string, fileInfo?: AlternateTextDocInfo): Promise<string[]> {
+
+        const prompt = (DEFAULT_QUESITON_ABSTRUCT_PROMPT).replaceAll(`{docTitle}`, fileInfo.docTitle)
+            .replaceAll(`{parentHeading}`, fileInfo.parentHeading)
+            .replaceAll("{docHPath}", fileInfo.docHPath)
+            .replaceAll("{context}", context);
         const response = await this.chat({
             model: this.otherArgs.modelName ?? "",
             messages: [

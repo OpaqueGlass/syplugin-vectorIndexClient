@@ -1,13 +1,15 @@
 <template>
   <div class="fn__flex-1 fn__flex config__panel" style="width: auto; height: 100%; max-width: 1280px;">
-    <ul class="b3-tab-bar b3-list b3-list--background">
-      <li v-for="tab in tabList" :key="tab.key"
-          :class="{ 'b3-list-item--focus': activeTab === tab.key, 'b3-list-item': true }" 
-          @click="activeTab = tab.key">
-        <svg class="b3-list-item__graphic"><use :xlink:href="'#' + tab.iconKey"></use></svg>
-        <span class="b3-list-item__text">{{ settingPageLang(tab.key)[0] }}</span>
-      </li>
-    </ul>
+    <div class="config__side">
+      <ul class="b3-tab-bar b3-list b3-list--background">
+        <li v-for="tab in tabList" :key="tab.key"
+            :class="{ 'b3-list-item--focus': activeTab === tab.key, 'b3-list-item': true }" 
+            @click="activeTab = tab.key">
+          <svg class="b3-list-item__graphic"><use :xlink:href="'#' + tab.iconKey"></use></svg>
+          <span class="b3-list-item__text">{{ settingPageLang(tab.key)[0] }}</span>
+        </li>
+      </ul>
+    </div>
 
     <div class="config__tab-wrap">
       <Page v-for="tab in tabList" :key="tab.key" v-show="activeTab === tab.key">

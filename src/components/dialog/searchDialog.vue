@@ -63,7 +63,7 @@
                          @click="onItemClick(item)">
                         {{ item.content }}
                     </div>
-                    <div style="font-size: 0.85em; opacity: 0.8; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <div style="font-size: 0.85em; opacity: 0.8; display: flex; column-gap: 8px; flex-wrap: wrap;">
                         <span style="opacity: 0.6;">{{ lang("source") }}</span>
                         <span v-for="doc in resultDocNames[index]" :key="doc.id" 
                               @click.stop="openDoc(doc.id)"
@@ -265,17 +265,23 @@ const performSearch = async () => {
 
 // 跳转文档
 const openDoc = async (id: string) => {
-    if (isValidStr(id) && await getBlockDBItem(id)) {
-        openRefLinkByAPI({ paramDocId: id });
+    const blockDBItem = await getBlockDBItem(id)
+    if (isValidStr(id) && blockDBItem) {
+        if (blockDBItem.type === "d") {
+            openRefLinkByAPI({ paramDocId: id, removeCurrentTab: false });
+        } else {
+            openRefLinkByAPI({ paramDocId: id, removeCurrentTab: true, openInFocus: true });
+        }
         props.dialog?.destroy();
     } else {
         showPluginMessage(lang("error_doc_not_found"));
     }
 };
 
-const onItemClick = (item: QueryResult) => {
+const onItemClick = async (item: QueryResult) => {
     if (item.ids && item.ids.length > 0) {
-        openDoc(item.ids[0]);
+        const blockDBItem = await getBlockDBItem(item.ids[0]);
+        openDoc(blockDBItem?.root_id);
     }
 };
 
