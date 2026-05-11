@@ -6,6 +6,9 @@ import { errorPush, logPush } from "@/logger";
 import { useWorker } from "@/utils/indexerHelper";
 import { showPluginMessage } from "@/utils/pluginCommon";
 import { lang } from "@/utils/lang";
+import { getDocDBitem } from "@/syapi/custom";
+import { docFilter } from "@/utils/filterBlocksUtils";
+import { JSONStorage } from "@/utils/jsonStorageUtil";
 export default class EventHandler {
     private handlerBindList: Record<string, (arg1: CustomEvent)=>void> = {
         "loaded-protyle-static": this.loadedProtyleRetryEntry.bind(this), // mutex需要访问EventHandler的属性
@@ -23,6 +26,8 @@ export default class EventHandler {
     private loadAndSwitchMutex: Mutex;
     private simpleMutex: number = 0;
     private docIdMutex: Record<string, number> = {};
+
+    private userManualIndexJsonStorage: JSONStorage<{[key: string]: boolean}> = new JSONStorage("userManualIndex.json", {});
     constructor() {
         this.loadAndSwitchMutex = new Mutex();
     }
@@ -50,9 +55,16 @@ export default class EventHandler {
     }
 
     async wsMainEntry(event: CustomEvent<IEventBusMap["ws-main"]>) {
-        const cmdType = ["moveDoc", "rename", "removeDoc", "savedoc"];
+        const cmdType = ["removeDoc", "savedoc"];
         if (cmdType.includes(event.detail.cmd)) {
             logPush("ws-main event received: " + event.detail.cmd, event.detail);
+            // TODO: 
+            const docId = event.detail.data.rootID;
+            if (await this.userManualIndexJsonStorage.get(docId) == true
+                || await docFilter.filterDoc(docId)) {
+                const worker = await useWorker();
+                worker.pushToQueueAndStart(docId, 30 * 60 * 1000);
+            }
         }
     }
 
@@ -65,18 +77,19 @@ export default class EventHandler {
             event.detail.menu.addItem({
                 "label": "[vic] " + lang("menu_indexSelectDoc"),
                 "click": async (element, mouseEvent)=>{
-                    const idList = [].map.call(event.detail.elements, (item)=>item.getAttribute("data-node-id"));
-                    logPush("innerdata", event.detail, idList);
+                    const idList:string[] = [].map.call(event.detail.elements, (item)=>item.getAttribute("data-node-id"));
                     const worker = await useWorker();
                     logPush("myworker", worker);
                     worker.pushToQueueAndStart(idList).catch(errorPush);
+                    idList.forEach(item => {
+                        this.userManualIndexJsonStorage.set(item, true);
+                    });
                     showPluginMessage(lang("msg_pushToQueue"));
                 }
             });
             event.detail.menu.addItem({
                 "label": "[vic] " + lang("menu_indexSelectDocWithSub"),
                 "click": async (element, mouseEvent)=>{
-                    logPush("dinnerdataa", event.detail);
                     let parentIdList = [].map.call(event.detail.elements, (item)=>item.getAttribute("data-node-id"));
                     const resultIds = [];
                     resultIds.push(...parentIdList);
@@ -84,6 +97,9 @@ export default class EventHandler {
                     for (let id of parentIdList) {
                         worker.addWithSubDocs(id).catch(errorPush);
                     }
+                    resultIds.forEach(item=>{
+                        this.userManualIndexJsonStorage.set(item, true);
+                    });
                     showPluginMessage(lang("msg_pushToQueue"));
                 }
             });

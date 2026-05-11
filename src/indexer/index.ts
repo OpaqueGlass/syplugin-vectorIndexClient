@@ -28,7 +28,7 @@ export class CacheQueue<T> {
     private saveTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly saveInterval: number;
     private readonly idSelector?: (item: T) => any;
-    private lastPersistedState: string = JSON.stringify([]);
+    private lastPersistedState: string = null;
     private writableFlag: boolean = false;
     private readonly lock = new AsyncLock();
 
@@ -187,6 +187,19 @@ export class CacheQueue<T> {
         return items.length > 0 ? items[0] : null;
     }
 
+    public async peek(count: number): Promise<T[]> {
+        const now = Date.now();
+        return this.lock.acquire(async () => {
+            const availableItems = this.queue.filter(q => q.availableAt <= now).slice(0, count);
+            return availableItems.map(q => q.data);
+        });
+    }
+
+    public async peekOne(): Promise<T | null> {
+        const items = await this.peek(1);
+        return items.length > 0 ? items[0] : null;
+    }
+
     private scheduleSave(): void {
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
@@ -213,6 +226,7 @@ export class CacheQueue<T> {
                 this.lastPersistedState = currentState;
             }
         });
+        debugPush("队列已持久化", { queueLength: this.queue.length });
     }
 
     /**

@@ -33,39 +33,51 @@ interface ChunkOutput {
 function splitTextSemantically(text: string, maxLength: number): string[] {
     if (text.length <= maxLength) return [text];
 
-    // 定义分隔符优先级：段落 > 换行 > 中文句尾 > 英文句尾 > 空格
-    const separators = [/\n\n/g, /\n/g, /。/g, /\.\s/g, /；/g, /;\s/g, /！/g, /!/g, /？/g, /\?\s/g, / /g];
-    let parts: string[] = [text];
-
-    for (const sep of separators) {
-        let newParts: string[] = [];
-        for (const part of parts) {
-            if (part.length <= maxLength) {
-                newParts.push(part);
-            } else {
-                // 按分隔符拆分，并保留分隔符以维持语义
-                const split = part.split(sep);
-                // 这里简单处理：拆分后如果还是长，就交给下一个分隔符
-                newParts.push(...split.filter(s => s.length > 0));
-            }
+    // 按照优先级拆分
+    const separators = ["\n\n", "\n", "。", "！", "？", "；", ". ", "! ", "? ", "; ", " ", ""];
+    
+    let separator = "";
+    for (const s of separators) {
+        if (s === "" || text.includes(s)) {
+            separator = s;
+            break;
         }
-        parts = newParts;
-        // 如果所有片段都达标了，提前结束
-        if (parts.every(p => p.length <= maxLength)) break;
     }
 
-    // 兜底方案：如果标点拆分后依然超长，则强制切分
-    const finalParts: string[] = [];
-    for (const p of parts) {
-        if (p.length <= maxLength) {
-            finalParts.push(p);
+    let parts: string[];
+    if (separator === "") {
+        parts = [];
+        for (let i = 0; i < text.length; i += maxLength) {
+            parts.push(text.substring(i, i + maxLength));
+        }
+        return parts;
+    } else {
+        parts = text.split(separator).filter(p => p !== "").map((p, i, arr) => {
+            return i < arr.length - 1 ? p + separator : p;
+        });
+    }
+
+    const result: string[] = [];
+    let currentChunk = "";
+
+    for (const part of parts) {
+        if (part.length > maxLength) {
+            // 如果单个片段依然超长，递归处理
+            if (currentChunk) {
+                result.push(currentChunk);
+                currentChunk = "";
+            }
+            result.push(...splitTextSemantically(part, maxLength));
+        } else if (currentChunk.length + part.length <= maxLength) {
+            currentChunk += part;
         } else {
-            for (let i = 0; i < p.length; i += maxLength) {
-                finalParts.push(p.substring(i, i + maxLength));
-            }
+            result.push(currentChunk);
+            currentChunk = part;
         }
     }
-    return finalParts;
+    
+    if (currentChunk) result.push(currentChunk);
+    return result;
 }
 
 /**

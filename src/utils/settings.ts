@@ -13,6 +13,7 @@ interface IConfigProperty {
     btndo?: () => void,  // 按钮设置项的调用函数(callback)
     options?: Array<string>, // 选项key数组，元素顺序决定排序顺序，请勿使用非法字符串
     optionSameAsSettingKey?: string, // 如果选项的描述文本和其他某个设置项相同，在此指定；请注意，仍需要指定options
+    component?: any, // vue 组件
 }
 
 export class ConfigProperty {
@@ -27,16 +28,19 @@ export class ConfigProperty {
     description: string;
     tips: string;
 
+    component;
+
     optionNames: Array<string>;
     optionDesps: Array<string>;
 
-    constructor({key, type, min, max, btndo, options, optionSameAsSettingKey}: IConfigProperty){
+    constructor({key, type, min, max, btndo, options, component, optionSameAsSettingKey}: IConfigProperty){
         this.key = key;
         this.type = type;
         this.min = min;
         this.max = max;
         this.btndo = btndo;
         this.options = options ?? new Array<string>();
+        this.component = component;
 
         this.configName = lang(`setting_${key}_name`);
         this.description = lang(`setting_${key}_desp`);

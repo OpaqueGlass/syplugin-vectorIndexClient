@@ -7,7 +7,7 @@
   >
     <template v-if="item.type === 'CUSTOM'">
       <component 
-        v-if="item.component" 
+        v-if="item.component != null" 
         :is="item.component" 
         v-bind="item.props"
         v-model="modelValue"

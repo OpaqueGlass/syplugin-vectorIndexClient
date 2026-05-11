@@ -50,6 +50,8 @@ import { DistributedLeaderClient } from "./manager/distributeInstanceManager";
 import { bindApi2Window, unbindApi } from "./expose_api";
 import OpenAI from 'openai';
 import { ChromaClient } from "chromadb";
+import { removeFileAPI } from "./syapi";
+import { CONSTANTS } from "./constants";
 
 
 const STORAGE_NAME = "menu-config";
@@ -96,6 +98,7 @@ export default class OGVectorClientPlugin extends Plugin {
         // 移除所有已经插入的导航区
         removeStyle();
         this.distributeInstanceManager.sendLeaveNotification();
+        useWorker().then(woker=>woker.stop());
         unbindApi();
     }
 
@@ -123,6 +126,9 @@ export default class OGVectorClientPlugin extends Plugin {
             "destroyCallback": ()=>{app.unmount(); },
         });
         app.mount(`#og_plugintemplate_${uid}`);
+    }
+    uninstall(): void {
+        removeFileAPI(CONSTANTS.PLUGIN_DATA_SAVEPATH);
     }
 }
 

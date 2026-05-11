@@ -179,3 +179,9 @@ interface AIRerankResult {
   index: number;
   relevance_score: number;
 }
+
+interface IQueueStatus {
+  "totalSize": number,
+  "availableSize": number,
+  "isWorking": boolean | string,
+}

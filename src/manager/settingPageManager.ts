@@ -19,6 +19,11 @@ let tabProperties: Array<TabProperty> = [
 export function initSettingProperty() {
     tabProperties.push(
         new TabProperty({
+            key: "status", iconKey: "iconInfo", props: [
+                new ConfigProperty({ key: "statusPage", type: "CUSTOM", component: StatusPage })
+            ]
+        }),
+        new TabProperty({
             key: "general", iconKey: "iconSettings", props: [
                 new ConfigProperty({ key: "autoUpdate", type: "SWITCH" }),
                 new ConfigProperty({ key: "fullyIndex", type: "BUTTON", btndo: ()=>{
@@ -26,6 +31,7 @@ export function initSettingProperty() {
                     showPluginMessage("已创建后台任务")} 
                 }),
                 new ConfigProperty({ key: "ignoreDocListStr", type: "TEXTAREA" }),
+                new ConfigProperty({ key: "autoUpdateNotebooksListStr", type: "TEXTAREA" }),
             ]
         }),
         new TabProperty({
@@ -62,7 +68,7 @@ export function initSettingProperty() {
             ]
         }),
         new TabProperty({
-            key: "model", iconKey: "iconModel", props: {
+            key: "model", iconKey: "iconSparkles", props: {
                 "chatModel": [
                     new ConfigProperty({ key: "chatModel.modelType", type: "SELECT", options: ["oai"] }),
                     new ConfigProperty({ key: "chatModel.baseUrl", type: "TEXT" }),
@@ -94,25 +100,25 @@ export function initSettingProperty() {
             },
         }),
         new TabProperty({
-            key: "about", iconKey: "iconTheme", props: [
+            key: "about", iconKey: "iconInfo", props: [
                 new ConfigProperty({ key: "aboutTip", type: "TIPS" }),
-                new ConfigProperty({ key: "statusPage", type: "BUTTON", btndo: async()=>{
-                    // 生成Dialog内容
-                    const uid = generateUUID();
-                    // 创建dialog
-                    const app = createApp(StatusPage);
-                    const settingDialog = new Dialog({
-                        "title": lang("setting_panel_title"),
-                        "content": `
-                        <div id="og_plugintemplate_${uid}" style="overflow: hidden; position: relative;height: 100%;"></div>
-                        `,
-                        "width": isMobile() ? "92vw":"1040px",
-                        "height": isMobile() ? "50vw":"80vh",
-                        "destroyCallback": ()=>{app.unmount(); },
-                    });
-                    app.mount(settingDialog.element.querySelector(`#og_plugintemplate_${uid}`) as HTMLElement);
-                    // app.mount(`#og_plugintemplate_${uid}`);
-                }}),
+                // new ConfigProperty({ key: "statusPage", type: "BUTTON", btndo: async()=>{
+                //     // 生成Dialog内容
+                //     const uid = generateUUID();
+                //     // 创建dialog
+                //     const app = createApp(StatusPage);
+                //     const settingDialog = new Dialog({
+                //         "title": lang("setting_panel_title"),
+                //         "content": `
+                //         <div id="og_plugintemplate_${uid}" style="overflow: hidden; position: relative;height: 100%;"></div>
+                //         `,
+                //         "width": isMobile() ? "92vw":"1040px",
+                //         "height": isMobile() ? "50vw":"80vh",
+                //         "destroyCallback": ()=>{app.unmount(); },
+                //     });
+                //     app.mount(settingDialog.element.querySelector(`#og_plugintemplate_${uid}`) as HTMLElement);
+                //     // app.mount(`#og_plugintemplate_${uid}`);
+                // }}),
             ]
         }),
     );

@@ -196,13 +196,13 @@ class VectorIndexer {
 				logPush("无已载入的模型，重新创建");
 				switch (modelType) {
 					case "chat":
-						testModel = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						testModel = AIClientFactory.getChatClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"], modelConfig);
 						break;
 					case "embedding":
-						testModel = AIClientFactory.getEmbeddingClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						testModel = AIClientFactory.getEmbeddingClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"], modelConfig);
 						break;
 					case "rerank":
-						testModel = AIClientFactory.getRerankClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"]);
+						testModel = AIClientFactory.getRerankClient(modelConfig["modelType"], modelConfig["baseUrl"], modelConfig["apiKey"], modelConfig);
 						break;
 				}
 			}
@@ -227,6 +227,7 @@ class VectorIndexer {
 		debugPush("leaderChanged", isLeader);
 		this.isLeader = isLeader;
 		this.cacheQueue.setWritable(isLeader);
+		this.cacheQueue.persist();
 	}
 
 	async indexAll(notebookList: string[]) {
@@ -347,7 +348,7 @@ class VectorIndexer {
         return { subDocCount: allDocIds.length }; // 直接 return，主线程 await 即可拿到
     }
 
-    getQueueStatus() {
+    getQueueStatus(): IQueueStatus {
 		return {
 			"totalSize": this.cacheQueue.totalSize(),
 			"availableSize": this.cacheQueue.availableSize(),
@@ -374,15 +375,13 @@ class VectorIndexer {
 				if (this.cacheQueue.hasNext()) {
 					this.idleCycles = 0; // 只要有任务，重置空闲计数
 					while (this.cacheQueue.hasNext()) {
-						let docId = await this.cacheQueue.consumeOne();
+						let docId = await this.cacheQueue.peekOne();
 						let result = await this.processDocument(docId);
+						await this.cacheQueue.consumeOne();
 						if (result === false) {
 							await this.cacheQueue.addToQueue(docId, 10000);
 							await sleep(10000);
 							break; // 遇到错误建议跳出本次 while，等待下一轮
-						} else {
-							// 确保落盘，主要是leader判定较晚，一般刚启动完成的任务都无法落盘
-							this.cacheQueue.persist();
 						}
 					}
 				} else {

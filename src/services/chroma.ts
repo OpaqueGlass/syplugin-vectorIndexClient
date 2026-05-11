@@ -1,4 +1,4 @@
-import { AIClient, IEmbeddingClient } from "@/ai_client";
+import { IEmbeddingClient } from "@/ai_client";
 import { HealthStatus } from "@/constants";
 import { UpsertError } from "@/exceptions/upsertError";
 import { debugPush, errorPush, logPush, warnPush } from "@/logger";
@@ -11,8 +11,7 @@ import { JSONStorage } from "@/utils/jsonStorageUtil";
 import { getHeadingsByLevel, getMaxDepth, HeadingInfo } from "@/utils/syoutlineUtils";
 import { ChromaClient, Collection, Metadata, Search, Knn, K, GroupBy, MinK } from "chromadb";
 import { MyEmbeddingFunction } from "./chromaEmbedding";
-
-
+import pLimit from 'p-limit'; 
 
 interface ChromaDBConfig {
     host: string;
@@ -102,7 +101,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
             headers: headerJson
         });
         try {
-            this.getCollection();
+            await this.getCollection();
         } catch (e) {
 
         }
@@ -113,18 +112,26 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         // });
     }
 
-    async getCollection() {
+    async getCollection(noException = false) {
         if (this.collection) {
             return this.collection;
         }
-        this.collection = await this.client.getOrCreateCollection({
-            name: this.collectionName,
-            configuration: {
-                embeddingFunction: new MyEmbeddingFunction({
-                    func: async (...args)=>{return await this.aiClientServiceDict.embedding.wrappedEmbeddings(...args)}
-                })
-            },
-        });
+        try {
+            this.collection = await this.client.getOrCreateCollection({
+                name: this.collectionName,
+                configuration: {
+                    embeddingFunction: new MyEmbeddingFunction({
+                        func: async (...args)=>{return await this.aiClientServiceDict.embedding.wrappedEmbeddings(...args)}
+                    })
+                },
+            });
+        } catch (err) {
+            if (!noException) {
+                throw err;
+            }
+            return null;
+        }
+        
         return this.collection;
     }
 
@@ -250,28 +257,45 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         }
         const docInfo = await getDocDBitem(docId);
         try {
-            const questionPromises = mainContentList.map(content => this.aiClientServiceDict.chat.getAlternateTextQuestion(content, {
-                "docTitle": docInfo.content,
-                "parentHeading": parentHeadingInfo.content,
-                "docHPath": docInfo.hpath
-            }));
-            const questionLists = await Promise.all(questionPromises);
-            for (let i = 0; i < questionLists.length; i++) {
-                const questions = questionLists[i];
-                if (! (questions instanceof Array)) {
-                    logPush("模型返回内容格式无效，跳过", questions);
-                    continue;
-                }
-                const questionEmbeddings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(questions);
-                const questionMetadatas = questions.map(q => ({...chunks[i], question: q, contentType: "question"}));
-                debugPush("Quesiton内容", questions)
-                await this.collection.upsert({
-                    ids: questions.map((q, index) => `${chunks[i].ids}-question-${index}`),
-                    metadatas: questionMetadatas,
-                    embeddings: questionEmbeddings,
-                    documents: Array(questions.length).fill(chunks[i].content)
+            // 设置并发数，建议根据你的 API Key 限制调整（如 5-10）
+            const limit = pLimit(5); 
+
+            const taskPromises = mainContentList.map((content, i) => {
+                return limit(async () => {
+                    try {
+                        const questions = await this.aiClientServiceDict.chat.getAlternateTextQuestion(content, {
+                            "docTitle": docInfo.content,
+                            "parentHeading": parentHeadingInfo.content,
+                            "docHPath": docInfo.hpath
+                        });
+
+                        if (!(questions instanceof Array)) {
+                            logPush("模型返回内容格式无效，跳过", questions);
+                            return;
+                        }
+
+                        const questionEmbeddings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(questions);
+                        
+                        const questionMetadatas = questions.map(q => ({
+                            ...chunks[i], 
+                            question: q, 
+                            contentType: "question"
+                        }));
+
+                        await this.collection.upsert({
+                            ids: questions.map((q, index) => `${chunks[i].ids}-question-${index}`),
+                            metadatas: questionMetadatas,
+                            embeddings: questionEmbeddings,
+                            documents: Array(questions.length).fill(chunks[i].content)
+                        });
+
+                        debugPush(`已完成第 ${i} 块的处理`);
+                    } catch (error) {
+                        logPush(`处理第 ${i} 块时出错:`, error);
+                    }
                 });
-            }
+            });
+            await Promise.all(taskPromises);
         } catch (e) {
             errorPush(`生成或嵌入提问失败。Failed to generate questions. ${e}`);
         }

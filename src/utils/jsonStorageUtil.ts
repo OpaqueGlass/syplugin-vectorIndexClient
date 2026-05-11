@@ -60,6 +60,9 @@ export class JSONStorage<T extends StorageData> {
      */
     set<K extends keyof T>(key: K, value: T[K]): void {
         this.data[key] = value;
+        if (value == undefined) {
+            delete this.data[key];
+        }
         this._triggerSave();
     }
 

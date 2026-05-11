@@ -17,7 +17,7 @@
           <div class="status-info">
             <p class="label">{{ lang('workingStatus') }}</p>
             <p class="status-text">
-              {{ queueStatus?.isWorking ? lang('statusRunning') : lang('statusIdle') }}
+              {{ statusStr }}
             </p>
           </div>
           <div class="status-indicator"></div>
@@ -61,20 +61,41 @@
 import { logPush } from '@/logger';
 import { useWorker } from '@/utils/indexerHelper';
 import { lang } from '@/utils/lang';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, Ref, ref } from 'vue';
 
 let worker = null;
 
 // 获取数据
 const errorList = ref([])
-const queueStatus = ref({});
+const queueStatus: Ref<IQueueStatus> = ref({
+  "availableSize": 0,
+  "totalSize": 0,
+  "isWorking": "error"
+});
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString();
 };
 
+const statusStr = computed(()=>{
+  if (queueStatus.value.isWorking === true) {
+    return lang('statusRunning');
+  } else if (queueStatus.value.isWorking === false) {
+    return lang('statusIdle')
+  } else {
+    return lang('status'+queueStatus.value);
+  }
+});
+
 onMounted(async ()=>{
     worker = await useWorker()
-    errorList.value = await worker.getRecentTaskInfo();
+    if (worker == null) {
+      queueStatus.value = {
+        "totalSize": 0,
+        "availableSize": 0,
+        "isWorking": "InitializeFailed",
+      }
+    }
+    errorList.value = await worker.getRecentTaskWarningInfo();
     queueStatus.value = await worker.getQueueStatus();
 })
 </script>

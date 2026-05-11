@@ -6,16 +6,20 @@
   "minAppVersion": "2.9.0",
   "backends": ["all"],
   "frontends": ["all"],
+  "disabledInPublish": true,
   "displayName": {
-    "en_US": "Vector Index Client",
+    "default": "Vector Index Client",
     "zh_CN": "向量搜索客户端"
   },
   "description": {
-    "en_US": "Integrate vector indexing databases or retrieval-augmented services, converting note content into vector indexes to provide semantic search capabilities.",
+    "default": "Integrate vector indexing databases or retrieval-augmented services, converting note content into vector indexes to provide semantic search capabilities.",
     "zh_CN": "接入向量索引数据库或检索增强服务，将笔记内容转换为向量索引，提供基于语义的搜索能力。目前只支持LightRAG"
   },
   "readme": {
-    "en_US": "README.md",
+    "default": "README.md",
     "zh_CN": "README_zh_CN.md"
+  },
+  "funding": {
+    "custom": ["https://wj.qq.com/s2/12395364/b69f/"]
   }
 }
