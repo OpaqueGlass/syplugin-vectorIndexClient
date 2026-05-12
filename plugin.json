@@ -2,7 +2,7 @@
   "name": "syplugin-vectorIndexClient",
   "author": "OpaqueGlass",
   "url": "https://github.com/OpaqueGlass/syplugin-vectorIndexClient",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha3",
   "minAppVersion": "2.9.0",
   "backends": ["all"],
   "frontends": ["all"],
