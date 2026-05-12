@@ -123,6 +123,8 @@ interface IVectorStoreService<TConfig = any> {
    * 重新处理索引失败的文档，通常在用户修复了导致索引失败的问题后调用
    */
   async reprocessFailed(): Promise<void>;
+
+  async clearAll(): Promise<void>;
 }
 
 interface ServiceResult {

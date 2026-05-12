@@ -65,6 +65,7 @@ export function initSettingProperty() {
                 }}),
                 new ConfigProperty({ key: "chroma.useQuestionAbstract", type: "SWITCH" }),
                 new ConfigProperty({ key: "chroma.useRerankModel", type: "SWITCH" }),
+                new ConfigProperty({ key: "chroma.resetCollection", type: "BUTTON"}),
             ]
         }),
         new TabProperty({

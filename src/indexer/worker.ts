@@ -19,7 +19,7 @@ import { ChromaClient } from "chromadb";
 import { AIClientFactory} from "@/ai_client/factory";
 import { IChatClient, IEmbeddingClient, IRerankClient } from "@/ai_client";
 import { ChromaService } from "@/services/chroma";
-
+import { DocFilter } from "@/utils/filterBlocksUtils";
 
 const SAVE_FOLDER = "/data/storage/petal/syplugin-vectorIndexClient";
 
@@ -55,6 +55,7 @@ class VectorIndexer {
 	private aiClientDict: AIClientDict = {"chat": null, "embedding": null, "rerank": null}; 
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
+	private docFilter: DocFilter|null = null;
 
 	public ignoreList: string[] = [];
 
@@ -142,6 +143,7 @@ class VectorIndexer {
 		this.g_setting_cache = globalConfig;
         this.startCycle();
 		setRelogTo(this.appendLogToRecentTasks.bind(this));
+		this.docFilter = new DocFilter(this.g_setting_cache);
     }
 
 	async stop() {
@@ -232,10 +234,30 @@ class VectorIndexer {
 
 	async indexAll(notebookList: string[]) {
 		for (let notebookId of notebookList) {
+			if (this.docFilter.filterNotebook(notebookId)) {
+				continue;
+			}
 			let allDocIds = await getSubDocIds(notebookId, true);
+			const finalResult = [];
+			for (let docId of allDocIds) {
+				if (await this.docFilter.filterDoc(docId)) {
+					continue;
+				}
+				finalResult.push(docId);
+			}
 			await this.pushToQueueAndStart(allDocIds);
 		}
 		return notebookList.length;
+	}
+
+	async clearAll(serviceId: string) {
+		const service = this.vectorManager.getServiceById(serviceId);
+		if (service) {
+			await service.clearAll();
+			return true;
+		} else {
+			return null;
+		}
 	}
 
 	private async processDocument(docId: string) {

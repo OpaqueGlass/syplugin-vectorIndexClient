@@ -231,13 +231,15 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
         const chunks = createChunks(childBlocks, parentHeadingInfo, docId, 900);
         const mainMetadatas = chunks.map(c => ({contentType: "original", ...c}));
         debugPush("单层级内容拆分后：", chunks);
+        if (chunks.length <= 0) {
+            return;
+        }
         // 原始内容
         const mainContentList = chunks.map(item => item.content);
         if (this.aiClientServiceDict.embedding == null) {
             throw new Error("Embedding Client not available");
         }
         const mainContentEmbedings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(mainContentList);
-
         await this.collection.upsert({
             ids: chunks.map(c => c.ids),
             metadatas: mainMetadatas,

@@ -58,10 +58,10 @@
 </template>
 
 <script lang="ts" setup>
-import { logPush } from '@/logger';
+import { debugPush, logPush } from '@/logger';
 import { useWorker } from '@/utils/indexerHelper';
 import { lang } from '@/utils/lang';
-import { computed, onMounted, Ref, ref } from 'vue';
+import { computed, onMounted, onUnmounted, Ref, ref } from 'vue';
 
 let worker = null;
 
@@ -70,23 +70,26 @@ const errorList = ref([])
 const queueStatus: Ref<IQueueStatus> = ref({
   "availableSize": 0,
   "totalSize": 0,
-  "isWorking": "error"
+  "isWorking": "Undefined"
 });
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString();
 };
+let interval = null;
 
 const statusStr = computed(()=>{
+  debugPush("status", queueStatus.value);
   if (queueStatus.value.isWorking === true) {
     return lang('statusRunning');
   } else if (queueStatus.value.isWorking === false) {
     return lang('statusIdle')
   } else {
-    return lang('status'+queueStatus.value);
+    return lang('status'+queueStatus.value.isWorking);
   }
 });
 
-onMounted(async ()=>{
+const refreshFunc = async()=>{
+  try {
     worker = await useWorker()
     if (worker == null) {
       queueStatus.value = {
@@ -94,9 +97,26 @@ onMounted(async ()=>{
         "availableSize": 0,
         "isWorking": "InitializeFailed",
       }
+      return;
     }
     errorList.value = await worker.getRecentTaskWarningInfo();
     queueStatus.value = await worker.getQueueStatus();
+  } catch (err) {
+    debugPush("refreshError", err);
+  }
+  
+}
+
+onMounted(async ()=>{
+    refreshFunc();
+    interval = setInterval(()=>{
+      refreshFunc()
+    }, 10_000)
+})
+
+
+onUnmounted(()=>{
+  clearInterval(interval)
 })
 </script>
 

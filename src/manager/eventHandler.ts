@@ -7,8 +7,8 @@ import { useWorker } from "@/utils/indexerHelper";
 import { showPluginMessage } from "@/utils/pluginCommon";
 import { lang } from "@/utils/lang";
 import { getDocDBitem } from "@/syapi/custom";
-import { docFilter } from "@/utils/filterBlocksUtils";
 import { JSONStorage } from "@/utils/jsonStorageUtil";
+import { DocFilter } from "@/utils/filterBlocksUtils";
 export default class EventHandler {
     private handlerBindList: Record<string, (arg1: CustomEvent)=>void> = {
         "loaded-protyle-static": this.loadedProtyleRetryEntry.bind(this), // mutex需要访问EventHandler的属性
@@ -31,6 +31,8 @@ export default class EventHandler {
     constructor() {
         this.loadAndSwitchMutex = new Mutex();
     }
+
+    private docFilter = null;
 
     bindHandler() {
         const plugin = getPluginInstance();
@@ -55,13 +57,16 @@ export default class EventHandler {
     }
 
     async wsMainEntry(event: CustomEvent<IEventBusMap["ws-main"]>) {
-        const cmdType = ["removeDoc", "savedoc"];
+        const cmdType = ["savedoc"];//"removeDoc", 
         if (cmdType.includes(event.detail.cmd)) {
             logPush("ws-main event received: " + event.detail.cmd, event.detail);
+            if (this.docFilter == null) {
+                this.docFilter = new DocFilter(getReadOnlyGSettings());
+            }
             // TODO: 
             const docId = event.detail.data.rootID;
             if (await this.userManualIndexJsonStorage.get(docId) == true
-                || await docFilter.filterDoc(docId)) {
+                || await this.docFilter.filterDoc(docId)) {
                 const worker = await useWorker();
                 worker.pushToQueueAndStart(docId, 30 * 60 * 1000);
             }

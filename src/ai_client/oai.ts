@@ -52,6 +52,9 @@ export class OAIClient extends BaseAIClient implements IChatClient, IEmbeddingCl
         let { model, input, dimensions, ...restBody } = body;
         model = model ?? this.otherArgs["modelName"];
         dimensions = dimensions ?? this.otherArgs["dimensions"];
+        if (dimensions === "") {
+            dimensions = undefined;
+        }
 
         const response = await this.oaiClient.embeddings.create({
             model: model,
@@ -192,19 +195,22 @@ export class OAIClient extends BaseAIClient implements IChatClient, IEmbeddingCl
             if (result) {
                 return {
                     available: true,
-                    connectivity: HealthStatus.HEALTHY
+                    connectivity: HealthStatus.HEALTHY,
+                    message: "Dimensions: " + result[0].length
                 };
             } else {
                 return {
                     available: false,
-                    connectivity: HealthStatus.UNHEALTHY
+                    connectivity: HealthStatus.UNHEALTHY,
+                    message: "Connected but no valid response"
                 }
             }
         } catch (err) {
             logPush("checkConnection Failed", err);
             return {
                 available: false,
-                connectivity: HealthStatus.UNKNOWN_ERROR
+                connectivity: HealthStatus.UNKNOWN_ERROR,
+                message: "" + err
             }
         }
     }

@@ -1,24 +1,38 @@
-import { getReadOnlyGSettings } from "@/manager/settingManager";
 import { isValidStr, quickCheckIsValidSiyuanId } from "./commonCheck";
 import { getDocDBitem } from "@/syapi/custom";
 
-async function getIgnoreList() {
-    const g_settings = getReadOnlyGSettings();
-    const ignoreList = g_settings.ignoreDocListStr.split("\n").map(item=>item.trim()).filter(item => quickCheckIsValidSiyuanId(item));
-    return ignoreList;
-}
-async function getNotebookWhiteList() {
-    const g_settings = getReadOnlyGSettings();
-    const autoUpdateNotebooksList = g_settings.autoUpdateNotebooksListStr.split("\n").map(item=>item.trim()).filter(item => quickCheckIsValidSiyuanId(item));
-    return autoUpdateNotebooksList;
-}
-
-class DocFilter {
+export class DocFilter {
 
     cacheList: Map<String, boolean> = new Map();
 
+    constructor(private g_settings) {
+
+    }
+
     resetCache() {
         this.cacheList = new Map();
+    }
+
+    async  getIgnoreList() {
+        const g_settings = this.g_settings;
+        if (!isValidStr(g_settings.ignoreDocListStr)) {
+            return [];
+        }
+        const ignoreList = g_settings.ignoreDocListStr.split("\n").map(item=>item.trim()).filter(item => quickCheckIsValidSiyuanId(item));
+        return ignoreList;
+    }
+    async  getNotebookWhiteList() {
+        const g_settings = this.g_settings;
+        if (!isValidStr(g_settings.autoUpdateNotebooksListStr)) {
+            return [];
+        }
+        const autoUpdateNotebooksList = g_settings.autoUpdateNotebooksListStr.split("\n").map(item=>item.trim()).filter(item => quickCheckIsValidSiyuanId(item));
+        return autoUpdateNotebooksList;
+    }
+
+    async filterNotebook(id: string) {
+        const ignoreList = await this.getIgnoreList();
+        return ignoreList.includes(id);
     }
 
     /**
@@ -40,7 +54,7 @@ class DocFilter {
             this.cacheList.set(id, false);
             return false;
         }
-        const ignoreList = await getIgnoreList();
+        const ignoreList = await this.getIgnoreList();
         for (let item of ignoreList) {
             if (dbItem.box === item) {
                 this.cacheList.set(id, false);
@@ -51,7 +65,7 @@ class DocFilter {
                 return false;
             }
         }
-        const whiteList = await getNotebookWhiteList();
+        const whiteList = await this.getNotebookWhiteList();
         if (whiteList.includes(dbItem.box)) {
             this.cacheList.set(id, true);
             return true;
@@ -61,6 +75,3 @@ class DocFilter {
         }
     }
 }
-
-
-export const docFilter = new DocFilter();
