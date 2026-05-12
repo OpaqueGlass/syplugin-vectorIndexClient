@@ -7,7 +7,7 @@
 import { exportMdContent, createFolder, queryAPI, listDocTree } from "@/syapi/index";
 import { CacheQueue } from ".";
 import { isValidStr } from "@/utils/commonCheck";
-import { debugPush, errorPush, logPush, setRelogTo, warnPush } from "@/logger";
+import { debugPush, errorPush, logPush, setDebugLevel, setRelogTo, warnPush } from "@/logger";
 import { VectorServiceManager } from "@/manager/indexServiceManager";
 import * as Comlink from "comlink";
 import { getBlockDBItem, getDocDBitem, getSubDocIds } from "@/syapi/custom";
@@ -56,6 +56,7 @@ class VectorIndexer {
 	// 忽略单个服务的错误，继续处理下一个文档，且不予重试
 	private ignoreSingleServiceErrors: boolean = false;
 	private docFilter: DocFilter|null = null;
+	private stopFlag: boolean = false;
 
 	public ignoreList: string[] = [];
 
@@ -108,6 +109,10 @@ class VectorIndexer {
 		debugPush("Worker starting");
 		if (globalConfig === null) {
 			globalConfig = this.g_setting_cache;
+		} else {
+			if (globalConfig["debugFlag"] == true) {
+				setDebugLevel(5);
+			}
 		}
 		// 初始化模型：
 		for (let key of Object.keys(this.aiClientDict)) {
@@ -234,7 +239,7 @@ class VectorIndexer {
 
 	async indexAll(notebookList: string[]) {
 		for (let notebookId of notebookList) {
-			if (this.docFilter.filterNotebook(notebookId)) {
+			if (await this.docFilter.filterNotebook(notebookId)) {
 				continue;
 			}
 			let allDocIds = await getSubDocIds(notebookId, true);
@@ -258,6 +263,10 @@ class VectorIndexer {
 		} else {
 			return null;
 		}
+	}
+
+	async clearQueue() {
+		await this.cacheQueue.reset();
 	}
 
 	private async processDocument(docId: string) {
@@ -388,7 +397,7 @@ class VectorIndexer {
 		}
 		logPush("Worker cycle started due to new tasks.");
 		this.idleCycles = 0; // 重置空闲计数
-		
+		this.stopFlag = false; // 重置停止标志
 		this.intervalFlag = setInterval(async () => {
 			if (this.working) return;
 			this.working = true;
@@ -404,6 +413,10 @@ class VectorIndexer {
 							await this.cacheQueue.addToQueue(docId, 10000);
 							await sleep(10000);
 							break; // 遇到错误建议跳出本次 while，等待下一轮
+						}
+						if (this.stopFlag) {
+							logPush("Worker stop flag detected, breaking the processing loop.");
+							break;
 						}
 					}
 				} else {
@@ -432,6 +445,7 @@ class VectorIndexer {
 			clearInterval(this.intervalFlag);
 			this.intervalFlag = null;
 			logPush("Worker entered sleep mode (3 idle cycles).");
+			this.stopFlag = true;
 		}
 	}
 }

@@ -4,6 +4,7 @@ import { showValidationResultDialog } from "@/utils/wrappedDialog";
 import { getReadOnlyGSettings } from "./settingManager";
 import { debugPush, errorPush } from "@/logger";
 import { confirm } from "siyuan";
+import { lang } from "@/utils/lang";
 
 const settingFunctions = {
     "fullyIndex": actionIndexAll,
@@ -11,6 +12,8 @@ const settingFunctions = {
     "embeddingModel.test": actionTestAiClient.bind(this, "embedding"),
     "rerankModel.test": actionTestAiClient.bind(this, "rerank"),
     "chroma.resetCollection": actionResetCollection.bind(this, "chroma"),
+    "stopCycle": actionStopCycle,
+    "cleanQueue": actionResetQueue,
 }
 
 export function handleSettionBtnAction(settingStr: string) {
@@ -37,15 +40,39 @@ async function actionTestAiClient(clientType: "embedding"|"rerank"|"chat") {
 }
 
 export function actionResetCollection(type: string) {
-    confirm("确认重置索引数据库", "你确定重置索引数据库吗？重置后需要重新执行索引，这非常耗时；除非正在切换嵌入模型，否则无需此操作。此操作不可逆、不可回退。", ()=>{
+    confirm(lang("confirm_reset_collection_title"), lang("confirm_reset_collection_desp"), ()=>{
         useWorker().then(async (worker)=>{
             try {
                 await worker.clearAll(type);
-                showPluginMessage("重置成功");
+                showPluginMessage(lang("msg_reset_collection_success"));
             } catch (err) {
                 errorPush("重置数据库时出错", err);
-                showPluginMessage("重置失败", undefined, "error");
+                showPluginMessage(lang("msg_reset_collection_error"), undefined, "error");
             }
         });
+    });
+}
+
+export function actionStopCycle() {
+    useWorker().then(async (worker)=>{
+        try {
+            await worker.stop();
+            showPluginMessage(lang("msg_stop_cycle_success"));
+        } catch (err) {
+            errorPush("停止循环时出错", err);
+            showPluginMessage(lang("msg_stop_cycle_error"), undefined, "error");
+        }
+    })
+}
+
+export function actionResetQueue() {
+    useWorker().then(async (worker)=>{
+        try {
+            await worker.clearQueue();
+            showPluginMessage(lang("msg_reset_queue_success"));
+        } catch (err) {
+            errorPush("清空任务队列时出错", err);
+            showPluginMessage(lang("msg_reset_queue_error"), undefined, "error");
+        }
     });
 }

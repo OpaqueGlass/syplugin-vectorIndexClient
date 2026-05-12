@@ -1,7 +1,7 @@
 import { CONSTANTS } from "@/constants";
 
 // debug push
-let g_DEBUG = 5;
+let g_DEBUG = 2;
 const THRESHOLD = 2;
 const g_NAME = CONSTANTS.PLUGIN_SHORT_NAME;
 const g_FULLNAME = CONSTANTS.PLUGIN_FULL_NAME;

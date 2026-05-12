@@ -32,6 +32,8 @@ export function initSettingProperty() {
                 }),
                 new ConfigProperty({ key: "ignoreDocListStr", type: "TEXTAREA" }),
                 new ConfigProperty({ key: "autoUpdateNotebooksListStr", type: "TEXTAREA" }),
+                new ConfigProperty({ key: "stopCycle", type: "BUTTON" }),
+                new ConfigProperty({ key: "cleanQueue", type: "BUTTON" }),
             ]
         }),
         new TabProperty({
@@ -103,6 +105,7 @@ export function initSettingProperty() {
         new TabProperty({
             key: "about", iconKey: "iconInfo", props: [
                 new ConfigProperty({ key: "aboutTip", type: "TIPS" }),
+                new ConfigProperty({ key: "debugFlag", type: "SWITCH" }),
                 // new ConfigProperty({ key: "statusPage", type: "BUTTON", btndo: async()=>{
                 //     // 生成Dialog内容
                 //     const uid = generateUUID();

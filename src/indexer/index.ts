@@ -241,6 +241,11 @@ export class CacheQueue<T> {
         await this.persist();
     }
 
+    public async reset(): Promise<void> {
+        this.queue = [];
+        await this.persist();
+    }
+
     public setWritable(writable: boolean) {
         this.writableFlag = writable;
     }

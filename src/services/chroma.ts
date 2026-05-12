@@ -275,6 +275,7 @@ export class ChromaService implements IVectorStoreService<ChromaDBConfig> {
                             logPush("模型返回内容格式无效，跳过", questions);
                             return;
                         }
+                        debugPush(`第 ${i} 块生成的提问`, questions);
 
                         const questionEmbeddings = await (this.aiClientServiceDict.embedding as IEmbeddingClient).wrappedEmbeddings(questions);
                         

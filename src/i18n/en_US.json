@@ -18,6 +18,10 @@
     "setting_statusPage_name": "Status Page",
     "setting_statusPage_desp": "View the plugin's runtime status",
     "setting_statusPage_btn": "Open Status Page",
+    "setting_cleanQueue_name": "Clean Index Queue",
+    "setting_cleanQueue_desp": "Clear the current pending index tasks queue. Tasks currently being processed cannot be interrupted. This operation is irreversible.",
+    "setting_stopCycle_name": "Pause Background Indexing",
+    "setting_stopCycle_desp": "Pause the currently executing background indexing tasks. Background indexing will resume after the next manual indexing or plugin restart.",
     
     "setting_aboutChroma_name": "About Chroma",
     "setting_aboutChroma_desp": "<a href='https://docs.trychroma.com/docs/overview/getting-started'>Chroma</a> is an open-source vector embedding database.",
